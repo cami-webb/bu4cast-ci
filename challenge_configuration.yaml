@@ -14,7 +14,7 @@ forecasts_bucket: 'challenges/project_id=bu4cast/forecasts'
 #noaa_forecast_bucket: bio230014-bucket01/neon4cast-drivers/noaa/gefs-v12
 targets_bucket: 'challenges/project_id=bu4cast/targets'
 target_metadata_bucket: 'challenges/project_id=bu4cast/metadata'
-field_sites_path: 'challenges/project_id=bu4cast/metadata/field_sites.csv'
+field_sites_path: 'challenges/project_id=bu4cast/metadata/field_sites_nodisease.csv'
 student_resources_bucket: 'challenges/project_id=bu4cast/students'
 drivers_bucket: 'challenges/project_id=bu4cast/drivers'
 gefs_start_date: "2026-02-09"
