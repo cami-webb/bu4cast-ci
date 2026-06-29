@@ -91,7 +91,7 @@ print("Computing new scores....")
 pb <- progress_bar$new(format = "  scoring [:bar] :percent in :elapsed",
                        total = total, clear = FALSE, width = 60)
 
-for (i in seq_along(row_number(groups))) {
+for (i in seq_len(nrow(groups))) {
   pb$tick()
   print(paste("Scoring model:", groups$model_id[i], "variable:", groups$variable[i]))
   score_group(i, groups)
