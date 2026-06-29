@@ -71,9 +71,18 @@ rescore <- FALSE
 obs_key_cols <- c("project_id", "site_id", "datetime", "duration", "variable")
 score_key_cols <- c(obs_key_cols, "model_id", "family", "reference_datetime")
 
-duckdbfs::duckdb_secrets(endpoint = config$endpoint,
-                         key = Sys.getenv("OSN_KEY"),
-                         secret = Sys.getenv("OSN_SECRET"))
+DBI::dbExecute(con, sprintf(
+  "CREATE OR REPLACE SECRET nerc_minio (
+    TYPE S3,
+    KEY_ID '%s',
+    SECRET '%s',
+    ENDPOINT 'minio-s3.apps.shift.nerc.mghpcc.org',
+    USE_SSL true,
+    URL_STYLE 'path'
+  );",
+  Sys.getenv("OSN_KEY"),
+  Sys.getenv("OSN_SECRET")
+))
 
 # Create vector of targets files
 for(i in 1:num_target_groups){
@@ -164,9 +173,18 @@ if(rescore) {
 
 print("Caching forecasts, scores, targets...")
 
-duckdbfs::duckdb_secrets(endpoint = config$endpoint,
-                         key = Sys.getenv("OSN_KEY"),
-                         secret = Sys.getenv("OSN_SECRET"))
+DBI::dbExecute(con, sprintf(
+  "CREATE OR REPLACE SECRET nerc_minio (
+    TYPE S3,
+    KEY_ID '%s',
+    SECRET '%s',
+    ENDPOINT 'minio-s3.apps.shift.nerc.mghpcc.org',
+    USE_SSL true,
+    URL_STYLE 'path'
+  );",
+  Sys.getenv("OSN_KEY"),
+  Sys.getenv("OSN_SECRET")
+))
 
 
 ## INSTEAD, we pull our subset to local disk first.
