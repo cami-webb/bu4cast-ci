@@ -73,8 +73,8 @@ for (i in 1:length(config$target_groups)) {
   exists <- tryCatch({
     duckdbfs::open_dataset(path, format = "csv", conn = con) |> dplyr::count() |> dplyr::collect()
     TRUE
-  }, error = function(e) {
-    message("Skipping ", basename(path), ": not found in S3")
+   }, error = function(e) {
+    message("Skipping ", basename(path), ": ", conditionMessage(e))
     FALSE
   })
   if (exists) {
