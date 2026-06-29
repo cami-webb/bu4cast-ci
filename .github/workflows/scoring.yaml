@@ -26,6 +26,7 @@ jobs:
 
       - name: install
         run: |
+          R -e "install.packages('rlang', lib='/usr/lib/R/site-library', repos='https://cloud.r-project.org')"
           R -e "options(repos = c(eco4cast = 'https://eco4cast.r-universe.dev', CRAN = 'https://cloud.r-project.org')); install.packages(c('bench', 'duckdbfs', 'minioclient', 'callr', 'score4cast'))"
           
       - name: scoring-prep
