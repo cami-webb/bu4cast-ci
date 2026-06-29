@@ -1,5 +1,5 @@
 #devtools::install_version("duckdb", "1.2.2")
-#remotes::install_github('cboettig/duckdbfs', upgrade = 'never')
+remotes::install_github('cboettig/duckdbfs', upgrade = 'never')
 
 library(dplyr)
 library(duckdbfs)
@@ -14,7 +14,7 @@ con <- duckdbfs::cached_connection(tempfile())
 DBI::dbExecute(con, "SET THREADS=64;")
 
 setup_s3 <- function(con) {
-  DBI::dbExecute(con, paste0("SET s3_access_key_id='",     Sys.getenv("OSN_KEY"),    "';"))
+  DBI::dbExecute(con, paste0("SET s3_access_key_id='", Sys.getenv("OSN_KEY"), "';"))
   DBI::dbExecute(con, paste0("SET s3_secret_access_key='", Sys.getenv("OSN_SECRET"), "';"))
   DBI::dbExecute(con, "SET s3_endpoint='minio-s3.apps.shift.nerc.mghpcc.org';")
   DBI::dbExecute(con, "SET s3_url_style='path';")
@@ -88,7 +88,8 @@ if (is.null(target_files)) stop("No target files found in S3. Check credentials 
 
 # Read targets via DBI
 targets <- lapply(target_files, function(path) {
-  DBI::dbGetQuery(con, sprintf("SELECT * FROM read_csv_auto('%s', nullstr='NA')", path))
+  DBI::dbGetQuery(con, sprintf("SELECT * FROM read_csv_auto('%s', nullstr='NA')", path)) |>
+    dplyr::mutate(site_id = as.character(site_id))  
 }) |> bind_rows() |>
   filter(project_id == project, datetime > cut_off_date, !is.na(observation)) |>
   duckdbfs::as_dataset(conn = con)
@@ -97,7 +98,7 @@ last_observed_date <- targets |> select(datetime) |> distinct() |>
   filter(datetime == max(datetime)) |> pull(datetime)
 
 forecasts <-
-  open_dataset(paste0("s3://", forecast_bundled_parquet_bucket)) |>
+  open_dataset(paste0("s3://", forecast_bundled_parquet_bucket), conn = con) |>
   filter(project_id == {project},
          datetime > {cut_off_date},
          datetime <= {last_observed_date},
@@ -110,7 +111,7 @@ forecasts <-
   filter(!(duration == "P1D" & horizon > 35))
 
 scores <-
-  open_dataset(paste0("s3://", scores_bundled_parquet_bucket)) |>
+  open_dataset(paste0("s3://", scores_bundled_parquet_bucket), conn = con) |>
   filter(project_id == {project},
          datetime > {cut_off_date},
          !is.na(observation))
@@ -135,9 +136,9 @@ bench::bench_time({
   targets |> group_by(variable) |> write_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/targets")
 })
 bench::bench_time({
-  forecasts <- open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/forecasts/**")
-  scores    <- open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/scores/**")
-  targets   <- open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/targets/**")
+  forecasts <- open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/forecasts/**", conn = con)
+  scores    <- open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/scores/**", conn = con)
+  targets   <- open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/targets/**", conn = con)
 })
 
 print("Compute who needs to be scored...")
