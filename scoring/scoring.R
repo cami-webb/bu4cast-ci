@@ -8,7 +8,7 @@ library(bench)
 library(minioclient)
 library(yaml)
 install_mc()
-mc_alias_set("minio", "minio-s3.apps.shift.nerc.mghpcc.org", Sys.getenv("OSN_KEY"), Sys.getenv("OSN_SECRET"))
+mc_alias_set("osn", "sdsc.osn.xsede.org", Sys.getenv("OSN_KEY"), Sys.getenv("OSN_SECRET"))
 #fs::dir_create("new_scores")
 
 config <- read_yaml("challenge_configuration.yaml")
@@ -26,13 +26,13 @@ project <- config$project_id
 ## But we can chunk naturally with dplyr distinct
 library(score4cast)
 con <- duckdbfs::cached_connection(tempfile())
-duckdbfs::duckdb_secrets(endpoint = config$endpoint,
-                         key = Sys.getenv("OSN_KEY"),
-                         secret = Sys.getenv("OSN_SECRET"),
-                         bucket = config$s3_bucket_write)
+duckdbfs::duckdb_secrets(endpoint = "s3-west.nrp-nautilus.io",
+                         key = Sys.getenv("EFI_NRP_KEY"),
+                         secret = Sys.getenv("EFI_NRP_SECRET"),
+                         bucket = "efi-scores")
 
 #
-fc <- open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/score_me", conn=con) |>
+fc <- open_dataset("s3://efi-scores/tmp/score_me", conn=con) |>
   filter(!is.na(model_id))
 groups <- fc |> distinct(project_id, duration, variable, model_id, family) |> collect()
 total <- nrow(groups)
@@ -48,11 +48,11 @@ score_group <- function(i, groups, project = "neon4cast") {
   # if we want to clear connection manually we need to re-open fc.  Maybe not necessary
   source("scoring/R/score_joined_table.R")
   con <- duckdbfs::cached_connection(tempfile())
-  duckdbfs::duckdb_secrets(endpoint = config$endpoint,
-                           key = Sys.getenv("OSN_KEY"),
-                           secret = Sys.getenv("OSN_SECRET"),
-                           bucket = config$s3_bucket_write)
-  fc <- duckdbfs::open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/score_me/**",
+  duckdbfs::duckdb_secrets(endpoint = "s3-west.nrp-nautilus.io",
+                           key = Sys.getenv("EFI_NRP_KEY"),
+                           secret = Sys.getenv("EFI_NRP_SECRET"),
+                           bucket = "efi-scores")
+  fc <- duckdbfs::open_dataset("s3://efi-scores/tmp/score_me/**",
                      conn=con) |>
     dplyr::filter(!is.na(model_id))
 
@@ -74,7 +74,7 @@ score_group <- function(i, groups, project = "neon4cast") {
                      "project_id={project}/duration={dur}/",
                      "variable={var}/model_id={model}")
 
-  path2 <- glue::glue("minio/", scores_bundled_parquet_bucket,
+  path2 <- glue::glue("osn/", scores_bundled_parquet_bucket,
                       "project_id={project}/duration={dur}/",
                       "variable={var}/model_id={model}")
 
@@ -85,10 +85,10 @@ score_group <- function(i, groups, project = "neon4cast") {
 
   file_exist <- length(mc_ls(path2))
 
-  duckdbfs::duckdb_secrets(endpoint = config$endpoint,
+  duckdbfs::duckdb_secrets(endpoint = "sdsc.osn.xsede.org",
                            key = Sys.getenv("OSN_KEY"),
                            secret = Sys.getenv("OSN_SECRET"),
-                           bucket = config$s3_bucket_write)
+                           bucket = scores_bundled_parquet_bucket)
 
   if(file_exist > 0){
 
@@ -136,14 +136,14 @@ for (i in seq_along(row_number(groups))) {
 
 # checks that we have no corruption
 checks <- function() {
-  duckdbfs::duckdb_secrets(endpoint = config$endpoint,
-                           key = Sys.getenv("OSN_KEY"),
-                           secret = Sys.getenv("OSN_SECRET"),
-                           bucket = config$s3_bucket_write)
-  open_dataset(paste0("s3://", scores_bundled_parquet_bucket)) |> count()
-  open_dataset(paste0("s3://", scores_bundled_parquet_bucket)) |>
+  duckdbfs::duckdb_secrets(endpoint = "s3-west.nrp-nautilus.io",
+                           key = Sys.getenv("EFI_NRP_KEY"),
+                           secret = Sys.getenv("EFI_NRP_SECRET"),
+                           bucket = "efi-scores")
+  open_dataset("s3://efi-scores/tmp/bundled-parquet/") |> count()
+  open_dataset("s3://efi-scores/tmp/bundled-parquet/") |>
     distinct(duration, variable, model_id) |> collect()
-  open_dataset(paste0("s3://", scores_bundled_parquet_bucket)) |>
+  open_dataset("s3://efi-scores/tmp/bundled-parquet/") |>
     summarise(first_fc = min(reference_datetime), last_fc = max(reference_datetime),
               first_prediction = min(datetime), last_prediction = max(datetime))
 
