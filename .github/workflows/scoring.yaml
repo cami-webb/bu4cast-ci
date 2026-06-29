@@ -1,3 +1,5 @@
+name: Scoring
+
 on:
   schedule:
 #    - cron: '0 10 * * *'
