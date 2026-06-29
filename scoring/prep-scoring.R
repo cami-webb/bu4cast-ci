@@ -65,15 +65,16 @@ obs_key_cols   <- c("project_id", "site_id", "datetime", "duration", "variable")
 score_key_cols <- c(obs_key_cols, "model_id", "family", "reference_datetime")
 
 # Build target file list, skipping any that don't exist in S3
+# Check existence and build target file list
 target_files <- NULL
 for (i in 1:length(config$target_groups)) {
   grp      <- config$target_groups[[i]]
   filepath <- if (!is.null(grp$targets_corrected_filepath)) grp$targets_corrected_filepath else grp$targets_filepath
   path     <- paste0("s3://", config$s3_bucket_read, "/", filepath)
   exists <- tryCatch({
-    duckdbfs::open_dataset(path, format = "csv", conn = con) |> dplyr::count() |> dplyr::collect()
+    DBI::dbGetQuery(con, sprintf("SELECT COUNT(*) FROM read_csv_auto('%s', SAMPLE_SIZE=1)", path))
     TRUE
-   }, error = function(e) {
+  }, error = function(e) {
     message("Skipping ", basename(path), ": ", conditionMessage(e))
     FALSE
   })
@@ -85,15 +86,12 @@ for (i in 1:length(config$target_groups)) {
 
 if (is.null(target_files)) stop("No target files found in S3. Check credentials and bucket paths")
 
-targets <-
-  open_dataset(target_files,
-               recursive = FALSE,
-               format = "csv",
-               parser_options = list(nullstr = "NA")
-               ) |>
-  filter(project_id == {project},
-         datetime > {cut_off_date},
-         !is.na(observation))
+# Read targets via DBI
+targets <- lapply(target_files, function(path) {
+  DBI::dbGetQuery(con, sprintf("SELECT * FROM read_csv_auto('%s', nullstr='NA')", path))
+}) |> bind_rows() |>
+  filter(project_id == project, datetime > cut_off_date, !is.na(observation)) |>
+  duckdbfs::as_dataset(conn = con)
 
 last_observed_date <- targets |> select(datetime) |> distinct() |>
   filter(datetime == max(datetime)) |> pull(datetime)
