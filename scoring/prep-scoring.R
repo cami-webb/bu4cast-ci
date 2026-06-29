@@ -67,16 +67,23 @@ score_key_cols <- c(obs_key_cols, "model_id", "family", "reference_datetime")
 # Build target file list, skipping any that don't exist in S3
 target_files <- NULL
 for (i in 1:length(config$target_groups)) {
-  path <- paste0("s3://", config$s3_bucket_read, "/", config$target_groups[[i]]$targets_filepath)
+  grp      <- config$target_groups[[i]]
+  filepath <- if (!is.null(grp$targets_corrected_filepath)) grp$targets_corrected_filepath else grp$targets_filepath
+  path     <- paste0("s3://", config$s3_bucket_read, "/", filepath)
   exists <- tryCatch({
-    duckdbfs::open_dataset(path, format = "csv") |> dplyr::count() |> dplyr::collect()
+    duckdbfs::open_dataset(path, format = "csv", conn = con) |> dplyr::count() |> dplyr::collect()
     TRUE
   }, error = function(e) {
     message("Skipping ", basename(path), ": not found in S3")
     FALSE
   })
-  if (exists) target_files <- c(target_files, path)
+  if (exists) {
+    message("Using target file: ", basename(path))
+    target_files <- c(target_files, path)
+  }
 }
+
+if (is.null(target_files)) stop("No target files found in S3. Check credentials and bucket paths")
 
 targets <-
   open_dataset(target_files,
