@@ -71,18 +71,23 @@ rescore <- FALSE
 obs_key_cols <- c("project_id", "site_id", "datetime", "duration", "variable")
 score_key_cols <- c(obs_key_cols, "model_id", "family", "reference_datetime")
 
-
 duckdbfs::duckdb_secrets(endpoint = config$endpoint,
-                         key = "",
-                         secret = "",
-                         bucket = scores_bucket_base)
+                         key = Sys.getenv("OSN_KEY"),
+                         secret = Sys.getenv("OSN_SECRET"),
+                         bucket = config$s3_bucket_read)
 
 
 # Create vector of targets files
-num_target_groups <- length(config$target_groups)
-target_files <- NULL
 for(i in 1:num_target_groups){
-  target_files <- c(target_files, paste0("s3://", config$s3_bucket_read, "/", config$target_groups[[i]]$targets_filepath))
+  path <- paste0("s3://", config$s3_bucket_read, "/", config$target_groups[[i]]$targets_filepath)
+  exists <- tryCatch({
+    duckdbfs::open_dataset(path, format = "csv") |> dplyr::count() |> dplyr::collect()
+    TRUE
+  }, error = function(e) {
+    message("Skipping ", basename(path), ": not found in S3")
+    FALSE
+  })
+  if (exists) target_files <- c(target_files, path)
 }
 
 
