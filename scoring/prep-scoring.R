@@ -55,7 +55,7 @@ remove_dir("minio/bu4cast-ci-write/challenges/project_id=bu4cast/tmp/scores")
 
 config <- read_yaml("challenge_configuration.yaml")
 
-forecast_bundled_parquet_bucket <- paste0(config$s3_bucket_read, "/", config$forecasts_bucket, "/bundled-parquet/")
+forecast_bundled_parquet_bucket <- paste0(config$s3_bucket_write, "/challenges/project_id=", config$project_id, "/bundled-parquet/")
 scores_bundled_parquet_bucket   <- paste0(config$scores_bucket, "/bundled-parquet/")
 
 project        <- config$project_id
