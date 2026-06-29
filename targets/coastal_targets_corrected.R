@@ -78,6 +78,9 @@ message("Applying corrections to CCI data...")
 buoy_data <- raw_data %>%
   dplyr::filter(variable == "chlora_buoy")
 
+mrwa_data <- raw_data %>%
+  dplyr::filter(variable == "chlora_mrwa")
+
 cci_corrected <- raw_data %>%
   dplyr::filter(variable == "chlora_cci") %>%
   dplyr::mutate(date = as.Date(substr(datetime, 1, 10))) %>%
@@ -94,7 +97,7 @@ cci_corrected <- raw_data %>%
   dplyr::select(-month, -median_ratio, -date) %>%
   dplyr::mutate(variable = "chlora_cci_corrected")
 
-corrected_data <- dplyr::bind_rows(buoy_data, cci_corrected) %>%
+corrected_data <- dplyr::bind_rows(buoy_data, cci_corrected, mrwa_data) %>%
   dplyr::arrange(site_id, datetime, variable)
 
 message("Rows in corrected data: ", nrow(corrected_data))

@@ -13,7 +13,7 @@ library(DBI)
 con <- duckdbfs::cached_connection(tempfile())
 DBI::dbExecute(con, "SET THREADS=64;")
 install_mc()
-mc_alias_set("osn", "s3-west.nrp-nautilus.io", Sys.getenv("EFI_NRP_KEY"), Sys.getenv("EFI_NRP_SECRET"))
+mc_alias_set("minio", "minio-s3.apps.shift.nerc.mghpcc.org", Sys.getenv("OSN_KEY"), Sys.getenv("OSN_SECRET"))
 
 remove_dir <- function(path) {
   tryCatch(
@@ -47,10 +47,10 @@ remove_dir <- function(path) {
   )
 }
 
-remove_dir("osn/efi-scores/tmp/score_me")
-remove_dir("osn/efi-scores/tmp/forecasts")
-remove_dir("osn/efi-scores/tmp/targets")
-remove_dir("osn/efi-scores/tmp/scores")
+remove_dir("minio/bu4cast-ci-write/challenges/project_id=bu4cast/tmp/score_me")
+remove_dir("minio/bu4cast-ci-write/challenges/project_id=bu4cast/tmp/forecasts")
+remove_dir("minio/bu4cast-ci-write/challenges/project_id=bu4cast/tmp/targets")
+remove_dir("minio/bu4cast-ci-write/challenges/project_id=bu4cast/tmp/scores")
 
 
 config <- read_yaml("challenge_configuration.yaml")
@@ -82,7 +82,7 @@ duckdbfs::duckdb_secrets(endpoint = config$endpoint,
 num_target_groups <- length(config$target_groups)
 target_files <- NULL
 for(i in 1:num_target_groups){
-  target_files <- c(target_files, config$target_groups[[i]]$targets_file)
+  target_files <- c(target_files, paste0("s3://", config$s3_bucket_read, "/", config$target_groups[[i]]$targets_filepath))
 }
 
 
@@ -161,30 +161,30 @@ if(rescore) {
 
 print("Caching forecasts, scores, targets...")
 
-duckdbfs::duckdb_secrets(endpoint = "s3-west.nrp-nautilus.io",
-                         key = Sys.getenv("EFI_NRP_KEY"),
-                         secret = Sys.getenv("EFI_NRP_SECRET"),
-                         bucket = "efi-scores")
+duckdbfs::duckdb_secrets(endpoint = config$endpoint,
+                         key = Sys.getenv("OSN_KEY"),
+                         secret = Sys.getenv("OSN_SECRET"),
+                         bucket = config$s3_bucket_write)
 
 
 ## INSTEAD, we pull our subset to local disk first.
 ## This looks silly but is much better for RAM and speed!!
 bench::bench_time({ # ~ 5.4m (w/ 6mo cutoff)
-  forecasts |> group_by(variable) |> write_dataset("s3://efi-scores/tmp/forecasts")
+  forecasts |> group_by(variable) |> write_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/forecasts")
 })
 
 bench::bench_time({
-  scores |> group_by(variable) |> write_dataset("s3://efi-scores/tmp/scores")
+  scores |> group_by(variable) |> write_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/scores")
 })
 
 bench::bench_time({
-    targets |> group_by(variable) |> write_dataset("s3://efi-scores/tmp/targets")
+    targets |> group_by(variable) |> write_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/targets")
 })
 
 bench::bench_time({
-  forecasts <- open_dataset("s3://efi-scores/tmp/forecasts/**")
-  scores <- open_dataset("s3://efi-scores/tmp/scores/**")
-  targets <- open_dataset("s3://efi-scores/tmp/targets/**")
+  forecasts <- open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/forecasts/**")
+  scores <- open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/scores/**")
+  targets <- open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/targets/**")
 })
 
 ## Magic rock&roll time: Subset unscored + targets available:
@@ -194,6 +194,6 @@ bench::bench_time({ # ~ 13s
     anti_join(select(scores, all_of(score_key_cols))) |> # forecast is unscored
     inner_join(targets) |> # forecast has targets available
     group_by(variable) |>
-    write_dataset("s3://efi-scores/tmp/score_me")
+    write_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/score_me")
 
 })
