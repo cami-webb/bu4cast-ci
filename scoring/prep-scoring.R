@@ -73,9 +73,7 @@ score_key_cols <- c(obs_key_cols, "model_id", "family", "reference_datetime")
 
 duckdbfs::duckdb_secrets(endpoint = config$endpoint,
                          key = Sys.getenv("OSN_KEY"),
-                         secret = Sys.getenv("OSN_SECRET"),
-                         bucket = config$s3_bucket_read)
-
+                         secret = Sys.getenv("OSN_SECRET"))
 
 # Create vector of targets files
 for(i in 1:num_target_groups){
@@ -168,8 +166,7 @@ print("Caching forecasts, scores, targets...")
 
 duckdbfs::duckdb_secrets(endpoint = config$endpoint,
                          key = Sys.getenv("OSN_KEY"),
-                         secret = Sys.getenv("OSN_SECRET"),
-                         bucket = config$s3_bucket_write)
+                         secret = Sys.getenv("OSN_SECRET"))
 
 
 ## INSTEAD, we pull our subset to local disk first.
