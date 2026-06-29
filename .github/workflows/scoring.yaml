@@ -26,6 +26,7 @@ jobs:
 
       - name: install
         run: |
+          sudo sed -i '/r2u/d' /etc/apt/sources.list.d/*.list 2>/dev/null || true
           R -e "update.packages(ask=FALSE, checkBuilt=TRUE, lib='/usr/lib/R/site-library', repos='https://cloud.r-project.org')"
           R -e "options(repos = c(eco4cast = 'https://eco4cast.r-universe.dev', CRAN = 'https://cloud.r-project.org')); install.packages(c('bench', 'duckdbfs', 'minioclient', 'callr'))"
           R -e "remotes::install_github('eco4cast/score4cast')"
