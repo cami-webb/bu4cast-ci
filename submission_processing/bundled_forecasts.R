@@ -169,20 +169,24 @@ for (path in model_paths) {
   })
   
   # Combine if old data was found
-  if(!is.null(old)) {
+  if(!is.null(tmp_old)) {
     bundled_dir <- bundled_path |> str_replace(fixed("s3://"), "osn/") |> mc_ls(details = TRUE)
     mc_bundled_path <- bundled_dir |> filter(!is_folder) |> pull(path)
     stopifnot(length(mc_bundled_path) == 1)
     bundled_path <- mc_bundled_path |> str_replace(fixed("osn/"), fixed("s3://"))
   
-    new <- union(tmp_old, tmp_new)
+    new <- dplyr::bind_rows(tmp_old, tmp_new) |> dplyr::distinct()
   } else {
     new <- tmp_new
   }
 
   # Write data to bundled
-  new |> write_dataset(bundled_path, options = list("PER_THREAD_OUTPUT false"))
-
+  dbWriteTable(con, "new_data", new, overwrite = TRUE)
+  dbExecute(con, sprintf(
+    "COPY new_data TO '%s' (FORMAT PARQUET)",
+    paste0(bundled_path, "part-0.parquet")
+  ))
+  
   # Create archived parquet
   mc_path <- path |> str_replace(fixed("s3://"), "osn/")
   dest_path <- mc_path |> str_replace(fixed("/parquet"), "/archive-parquet")
