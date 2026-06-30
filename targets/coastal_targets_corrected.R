@@ -82,7 +82,7 @@ mrwa_data <- raw_data %>%
   dplyr::filter(variable == "chlora_mrwa")
 
 cci_corrected <- raw_data %>%
-  dplyr::filter(variable == "chlora_cci") %>%
+  dplyr::filter(variable == "chlora_cci", site_id == "1") %>%
   dplyr::mutate(date = as.Date(substr(datetime, 1, 10))) %>%
   dplyr::filter(!date %in% exclude_dates) %>%
   dplyr::mutate(month = lubridate::month(date)) %>%
@@ -97,7 +97,24 @@ cci_corrected <- raw_data %>%
   dplyr::select(-month, -median_ratio, -date) %>%
   dplyr::mutate(variable = "chlora_cci_corrected")
 
-corrected_data <- dplyr::bind_rows(buoy_data, cci_corrected, mrwa_data) %>%
+# Apply same monthly correction factors to site 2 CCI
+cci_corrected_mrwa <- raw_data %>%
+  dplyr::filter(variable == "chlora_cci", site_id == "2") %>%
+  dplyr::mutate(date = as.Date(substr(datetime, 1, 10))) %>%
+  dplyr::filter(!date %in% exclude_dates) %>%
+  dplyr::mutate(month = lubridate::month(date)) %>%
+  dplyr::left_join(correction_factor, by = "month") %>%
+  dplyr::mutate(
+    observation = dplyr::if_else(
+      !is.na(median_ratio) & median_ratio > 0,
+      observation / median_ratio,
+      observation
+    )
+  ) %>%
+  dplyr::select(-month, -median_ratio, -date) %>%
+  dplyr::mutate(variable = "chlora_cci_corrected")
+
+corrected_data <- dplyr::bind_rows(buoy_data, cci_corrected, cci_corrected_mrwa, mrwa_data) %>%
   dplyr::arrange(site_id, datetime, variable)
 
 message("Rows in corrected data: ", nrow(corrected_data))
