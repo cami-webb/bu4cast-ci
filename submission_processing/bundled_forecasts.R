@@ -115,77 +115,51 @@ dbExecute(con, sprintf("
 ", Sys.getenv("OSN_KEY"), Sys.getenv("OSN_SECRET")))
 
 # Loop through each model path
-# Loop through each model path
 for (path in model_paths) {
 
   # Prep paths
   print(paste("Processing:", path))
   bundled_path <- path |> str_replace(fixed("/parquet"), "/bundled-parquet")
   print(paste("Bundled Path:", bundled_path))
-  
+
   # Build S3 query paths
-  s3_query_path <- paste0(path, "**/*.parquet")
+  s3_query_path         <- paste0(path, "**/*.parquet")
   s3_query_bundled_path <- paste0(bundled_path, "**/*.parquet")
+  out_file              <- paste0(bundled_path, "part-0.parquet")
 
-  # Load all new data from parquet
-  tmp_new <- tryCatch({
-    # Read all parquet files with hive partitioning
-    query <- sprintf("
-      SELECT *
-      FROM read_parquet('%s', hive_partitioning = true)
-      WHERE model_id IS NOT NULL
-      AND parameter IS NOT NULL
-      AND prediction IS NOT NULL
-    ", s3_query_path)
-    
-    result <- dbGetQuery(con, query)
-    print(paste("Read", nrow(result), "rows"))
-    print(paste("Columns:", paste(colnames(result), collapse = ", ")))
-    result
+  # Check if existing bundled data exists
+  has_old <- tryCatch({
+    dbGetQuery(con, sprintf("SELECT COUNT(*) FROM read_parquet('%s', hive_partitioning=true)", 
+                            s3_query_bundled_path))[[1]] > 0
+  }, error = function(e) FALSE)
+
+  # Write directly S3→S3 via DuckDB COPY, no R data frame involved
+  tryCatch({
+    if (has_old) {
+      query <- sprintf("
+        COPY (
+          SELECT * FROM read_parquet('%s', hive_partitioning=true)
+          UNION ALL
+          SELECT * FROM read_parquet('%s', hive_partitioning=true)
+          WHERE model_id IS NOT NULL AND parameter IS NOT NULL AND prediction IS NOT NULL
+        ) TO '%s' (FORMAT PARQUET)",
+        s3_query_bundled_path, s3_query_path, out_file)
+    } else {
+      query <- sprintf("
+        COPY (
+          SELECT * FROM read_parquet('%s', hive_partitioning=true)
+          WHERE model_id IS NOT NULL AND parameter IS NOT NULL AND prediction IS NOT NULL
+        ) TO '%s' (FORMAT PARQUET)",
+        s3_query_path, out_file)
+    }
+    dbExecute(con, query)
+    print(paste("Wrote bundled parquet to", out_file))
   }, error = function(e) {
-    print(paste("Error reading new path ", path, ":", e$message))
-    NULL
+    print(paste("Error bundling", path, ":", e$message))
   })
-
-  if (is.null(tmp_new) || nrow(tmp_new) == 0) {
-    print(paste("No new data for", path, "- skipping"))
-    next
-  }
-
-  # Load all old data from parquet
-  tmp_old <- tryCatch({
-    # Read all parquet files with hive partitioning
-    query_old <- sprintf("
-      SELECT *
-      FROM read_parquet('%s', hive_partitioning = true)
-    ", s3_query_bundled_path)
-    
-    result <- dbGetQuery(con, query_old)
-    print(paste("Read", nrow(result), "rows"))
-    print(paste("Columns:", paste(colnames(result), collapse = ", ")))
-    result
-  }, error = function(e) {
-    print(paste("No existing bundled data for ", s3_query_bundled_path))
-    NULL
-  })
-  
-  # Combine if old data was found
-  new <- if (!is.null(tmp_old)) {
-    dplyr::bind_rows(tmp_old, tmp_new) |> dplyr::distinct()
-  } else {
-    tmp_new
-  }
-
-  # Write data to bundled
-  dbWriteTable(con, "new_data", new, overwrite = TRUE)
-  dbExecute(con, sprintf(
-    "COPY new_data TO '%s' (FORMAT PARQUET)",
-    paste0(bundled_path, "part-0.parquet")
-  ))
-  print(paste("Wrote", nrow(new), "rows to bundled path"))
 
   # Create archived parquet
-  mc_path <- path |> str_replace(fixed("s3://"), "osn/")
+  mc_path  <- path |> str_replace(fixed("s3://"), "osn/")
   dest_path <- mc_path |> str_replace(fixed("/parquet"), "/archive-parquet")
   mc_mv(mc_path, dest_path, recursive = TRUE)
 
