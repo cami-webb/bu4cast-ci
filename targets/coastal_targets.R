@@ -35,6 +35,10 @@ print(paste("filename:", filename))
 buoy_lat <- config$target_groups$Coastal$buoy_lat
 buoy_lon <- config$target_groups$Coastal$buoy_lon
 
+mrwa_site_id <- config$target_groups$Coastal$mrwa_site_id
+mrwa_lat     <- config$target_groups$Coastal$mrwa_lat
+mrwa_lon     <- config$target_groups$Coastal$mrwa_lon
+
 s3 <- arrow::s3_bucket(
   config$s3_bucket_read,
   endpoint_override = config$endpoint,
@@ -201,20 +205,6 @@ if (start_date_occci > end_date_occci) {
   k_cci <- 0L
 } else {
 
-  # Here I'm using a larger download box than 5x5 just to center the 5x5 better (later I slice the 5x5 exactly)
-  # 1 km ~ 1/111 degree lat. Use ~4 km halfwidth to get >= 5x5 coverage
-  # This could be stupid and redundant but I'm trying to be cautious (for once)
-  deg_per_km_lat <- 1 / 111
-  half_km_bbox   <- 4
-
-  lat_half <- half_km_bbox * deg_per_km_lat
-  lon_half <- lat_half / cos(buoy_lat * pi / 180)
-
-  north <- buoy_lat + lat_half
-  south <- buoy_lat - lat_half
-  east  <- buoy_lon + lon_half
-  west  <- buoy_lon - lon_half
-
   # Only process dates not in the coastal-targets.csv
   existing_occci_dates <- as.Date(character(0))
 
@@ -231,103 +221,109 @@ if (start_date_occci > end_date_occci) {
 
   message("OC-CCI new dates to process: ", length(days),
           if (length(days) > 0) paste0(" (", min(days), " to ", max(days), ")") else "")
-            
+
 total_days <- length(days)
 progress_msg("CCI download", 0, total_days)
-          
-  if (length(days) == 0) {
-    message("No new OC-CCI dates to process; skipping.")
-    cci_data <- data.frame()
-    k_cci <- 0L
-  } else {
 
-    # Trim 1km 5x5 pixel box centered around closest pixel to buoy
-    extract_day_5x5 <- function(day, vars) {
-      if (length(vars) == 0) return(NULL)
+  # Trim 1km 5x5 pixel box centered around closest pixel to target location
+  # Here I'm using a larger download box than 5x5 just to center the 5x5 better (later I slice the 5x5 exactly)
+  # 1 km ~ 1/111 degree lat. Use ~4 km halfwidth to get >= 5x5 coverage
+  # This could be stupid and redundant but I'm trying to be cautious (for once)
+  extract_day_5x5 <- function(day, vars, target_lat, target_lon) {
+    if (length(vars) == 0) return(NULL)
 
-      url <- paste0(
-        occci_ncss_base, "?",
-        "var=", paste(vars, collapse = "&var="),
-        "&north=", north, "&south=", south, "&east=", east, "&west=", west,
-        "&time_start=", as.character(day), "T00:00:00Z",
-        "&time_end=",   as.character(day), "T23:59:59Z",
-        "&accept=netcdf"
-      )
+    deg_per_km_lat <- 1 / 111
+    half_km_bbox   <- 4
+    lat_half <- half_km_bbox * deg_per_km_lat
+    lon_half <- lat_half / cos(target_lat * pi / 180)
+    north <- target_lat + lat_half
+    south <- target_lat - lat_half
+    east  <- target_lon + lon_half
+    west  <- target_lon - lon_half
 
-      tmp <- tempfile(fileext = ".nc")
-      ok <- tryCatch({
-        suppressWarnings(utils::download.file(url, destfile = tmp, mode = "wb", quiet = TRUE))
-        TRUE
-      }, warning = function(w) FALSE,
-         error   = function(e) FALSE)
+    url <- paste0(
+      occci_ncss_base, "?",
+      "var=", paste(vars, collapse = "&var="),
+      "&north=", north, "&south=", south, "&east=", east, "&west=", west,
+      "&time_start=", as.character(day), "T00:00:00Z",
+      "&time_end=",   as.character(day), "T23:59:59Z",
+      "&accept=netcdf"
+    )
 
-      if (!ok || !file.exists(tmp) || file.info(tmp)$size == 0) {
-        if (file.exists(tmp)) unlink(tmp)
-        return(NULL)
-      }
+    tmp <- tempfile(fileext = ".nc")
+    ok <- tryCatch({
+      suppressWarnings(utils::download.file(url, destfile = tmp, mode = "wb", quiet = TRUE))
+      TRUE
+    }, warning = function(w) FALSE,
+       error   = function(e) FALSE)
 
-      nc <- tryCatch(ncdf4::nc_open(tmp), error = function(e) {
-        message("nc_open failed for ", as.character(day), ": ", e$message)
-        NULL
-      })
-      if (is.null(nc)) { unlink(tmp); return(NULL) }
-      on.exit({
-        try(ncdf4::nc_close(nc), silent = TRUE)
-        unlink(tmp)
-      }, add = TRUE)
-
-      lat <- tryCatch(as.numeric(ncdf4::ncvar_get(nc, "lat")), error = function(e) NULL)
-      lon <- tryCatch(as.numeric(ncdf4::ncvar_get(nc, "lon")), error = function(e) NULL)
-      if (is.null(lat) || is.null(lon)) return(NULL)
-
-      # Nearest pixel indices
-      i0 <- which.min((lat - buoy_lat)^2)  # lat index
-      j0 <- which.min((lon - buoy_lon)^2)  # lon index
-
-      # 5x5 bounds
-      i1 <- max(1, i0 - 2); i2 <- min(length(lat), i0 + 2)
-      j1 <- max(1, j0 - 2); j2 <- min(length(lon), j0 + 2)
-
-      out <- list(date = day)
-
-      for (v in vars) {
-        arr <- tryCatch(ncdf4::ncvar_get(nc, v), error = function(e) NULL)
-        if (is.null(arr)) next
-
-        # Drop time dim if present
-        if (length(dim(arr)) == 3) arr <- arr[,,1, drop = TRUE]
-
-        d <- dim(arr)
-        if (is.null(d) || length(d) != 2) next
-
-        # decide whether arr is lon,lat or lat,lon (has been inconsistent so this is just a safeguard)
-        if (d[1] == length(lon) && d[2] == length(lat)) {
-          win <- arr[j1:j2, i1:i2, drop = FALSE]  # lon,lat
-        } else if (d[1] == length(lat) && d[2] == length(lon)) {
-          win <- arr[i1:i2, j1:j2, drop = FALSE]  # lat,lon
-        } else {
-          next
-        }
-
-        vals <- as.vector(win)
-        vals <- vals[is.finite(vals)]
-
-        out[[paste0(v, "_mean")]] <- if (length(vals) > 0) mean(vals) else NA_real_
-        out[[paste0(v, "_sd")]]   <- if (length(vals) > 1) sd(vals) else NA_real_
-        out[[paste0(v, "_n")]]    <- length(vals)  # = 25 if all pixels are valid
-      }
-
-      as.data.frame(out, stringsAsFactors = FALSE)
+    if (!ok || !file.exists(tmp) || file.info(tmp)$size == 0) {
+      if (file.exists(tmp)) unlink(tmp)
+      return(NULL)
     }
 
-    message("OC-CCI rows to process: ", length(days))
+    nc <- tryCatch(ncdf4::nc_open(tmp), error = function(e) {
+      message("nc_open failed for ", as.character(day), ": ", e$message)
+      NULL
+    })
+    if (is.null(nc)) { unlink(tmp); return(NULL) }
+    on.exit({
+      try(ncdf4::nc_close(nc), silent = TRUE)
+      unlink(tmp)
+    }, add = TRUE)
 
-    out_list <- vector("list", length(days))
-    kk <- 0L
+    lat <- tryCatch(as.numeric(ncdf4::ncvar_get(nc, "lat")), error = function(e) NULL)
+    lon <- tryCatch(as.numeric(ncdf4::ncvar_get(nc, "lon")), error = function(e) NULL)
+    if (is.null(lat) || is.null(lon)) return(NULL)
 
-    for (ii in seq_along(days)) {
+    # Nearest pixel indices
+    i0 <- which.min((lat - target_lat)^2)  # lat index
+    j0 <- which.min((lon - target_lon)^2)  # lon index
+
+    # 5x5 bounds
+    i1 <- max(1, i0 - 2); i2 <- min(length(lat), i0 + 2)
+    j1 <- max(1, j0 - 2); j2 <- min(length(lon), j0 + 2)
+
+    out <- list(date = day)
+
+    for (v in vars) {
+      arr <- tryCatch(ncdf4::ncvar_get(nc, v), error = function(e) NULL)
+      if (is.null(arr)) next
+
+      # Drop time dim if present
+      if (length(dim(arr)) == 3) arr <- arr[,,1, drop = TRUE]
+
+      d <- dim(arr)
+      if (is.null(d) || length(d) != 2) next
+
+      # decide whether arr is lon,lat or lat,lon (has been inconsistent so this is just a safeguard)
+      if (d[1] == length(lon) && d[2] == length(lat)) {
+        win <- arr[j1:j2, i1:i2, drop = FALSE]  # lon,lat
+      } else if (d[1] == length(lat) && d[2] == length(lon)) {
+        win <- arr[i1:i2, j1:j2, drop = FALSE]  # lat,lon
+      } else {
+        next
+      }
+
+      vals <- as.vector(win)
+      vals <- vals[is.finite(vals)]
+
+      out[[paste0(v, "_mean")]] <- if (length(vals) > 0) mean(vals) else NA_real_
+      out[[paste0(v, "_sd")]]   <- if (length(vals) > 1) sd(vals) else NA_real_
+      out[[paste0(v, "_n")]]    <- length(vals)  # = 25 if all pixels are valid
+    }
+
+    as.data.frame(out, stringsAsFactors = FALSE)
+  }
+
+  message("OC-CCI rows to process: ", length(days))
+
+  out_list <- vector("list", length(days))
+  kk <- 0L
+
+  for (ii in seq_along(days)) {
   progress_msg("CCI download", ii, total_days)
-  res <- tryCatch(extract_day_5x5(days[ii], occci_vars_wanted),
+  res <- tryCatch(extract_day_5x5(days[ii], occci_vars_wanted, buoy_lat, buoy_lon),
                   error = function(e) { message("extract failed: ", e$message); NULL })
   if (!is.null(res)) {
     kk <- kk + 1L
@@ -336,43 +332,107 @@ progress_msg("CCI download", 0, total_days)
 }
   progress_msg("CCI download", total_days, total_days)
 
-    occci_df <- if (kk == 0L) data.frame() else do.call(rbind, out_list[seq_len(kk)])
-    if (nrow(occci_df) > 0) {
-      occci_df$date <- as.Date(occci_df$date)
-      occci_df <- occci_df %>% dplyr::arrange(date)
+  occci_df <- if (kk == 0L) data.frame() else do.call(rbind, out_list[seq_len(kk)])
+  if (nrow(occci_df) > 0) {
+    occci_df$date <- as.Date(occci_df$date)
+    occci_df <- occci_df %>% dplyr::arrange(date)
+  }
+
+  # Match downstream formatting
+  if (nrow(occci_df) == 0) {
+    cci_data <- data.frame()
+    k_cci <- 0L
+  } else {
+    cci_data <- occci_df %>%
+      dplyr::transmute(
+        date = date,
+        chlorophyll_mean = if ("chlor_a_mean" %in% names(.)) chlor_a_mean else NA_real_,
+        chlorophyll_sd   = if ("chlor_a_sd"   %in% names(.)) chlor_a_sd   else NA_real_,
+        chlorophyll_n    = if ("chlor_a_n"    %in% names(.)) chlor_a_n    else NA_real_
+      )
+    k_cci <- nrow(cci_data)
+  }
+
+  message("OC-CCI rows processed: ", k_cci)
+
+  if (exists("cci_data") && nrow(cci_data) > 0) {
+    valid_n <- cci_data %>%
+      dplyr::filter(
+        !is.na(chlorophyll_mean),
+        chlorophyll_n > 0
+      ) %>%
+      dplyr::pull(chlorophyll_n)
+    # Just to monitor
+    message("Mean n = ",   mean(valid_n,   na.rm = TRUE))
+    message("Median n = ", median(valid_n, na.rm = TRUE))
+  }
+}
+
+## Download OC-CCI for MRWA site (site 2)
+
+message("Downloading OC-CCI data for MRWA site...")
+
+start_date_cci_mrwa <- as.Date("2006-01-01")
+if (!is.null(old_data) && nrow(old_data) > 0) {
+  old_cci_mrwa <- old_data[old_data$variable == "chlora_cci" & old_data$site_id == "2", , drop = FALSE]
+  if (nrow(old_cci_mrwa) > 0) {
+    last_cci_mrwa_date <- max(as.Date(substr(old_cci_mrwa$datetime, 1, 10)), na.rm = TRUE)
+    if (is.finite(last_cci_mrwa_date)) start_date_cci_mrwa <- last_cci_mrwa_date + 1
+  }
+}
+
+if (start_date_cci_mrwa > end_date) {
+  message("MRWA CCI already up-to-date; skipping.")
+  cci_mrwa_data <- data.frame()
+  k_cci_mrwa <- 0L
+} else {
+  days_mrwa <- seq.Date(as.Date(start_date_cci_mrwa), as.Date(end_date), by = "day")
+  existing_cci_mrwa_dates <- as.Date(character(0))
+  if (!is.null(old_data) && nrow(old_data) > 0) {
+    old_cci_mrwa <- old_data[old_data$variable == "chlora_cci" & old_data$site_id == "2", , drop = FALSE]
+    if (nrow(old_cci_mrwa) > 0) {
+      existing_cci_mrwa_dates <- unique(as.Date(substr(old_cci_mrwa$datetime, 1, 10)))
+      existing_cci_mrwa_dates <- existing_cci_mrwa_dates[!is.na(existing_cci_mrwa_dates)]
+    }
+  }
+  days_mrwa <- days_mrwa[!(days_mrwa %in% existing_cci_mrwa_dates)]
+  message("MRWA CCI new dates to process: ", length(days_mrwa))
+
+  if (length(days_mrwa) == 0) {
+    cci_mrwa_data <- data.frame()
+    k_cci_mrwa <- 0L
+  } else {
+    total_days_mrwa <- length(days_mrwa)
+    out_list_mrwa <- vector("list", total_days_mrwa)
+    kk_mrwa <- 0L
+
+    for (ii in seq_along(days_mrwa)) {
+      progress_msg("CCI MRWA download", ii, total_days_mrwa)
+      res <- tryCatch(extract_day_5x5(days_mrwa[ii], occci_vars_wanted, mrwa_lat, mrwa_lon),
+                      error = function(e) { message("extract failed: ", e$message); NULL })
+      if (!is.null(res)) { kk_mrwa <- kk_mrwa + 1L; out_list_mrwa[[kk_mrwa]] <- res }
     }
 
-    # Match downstream formatting
-    if (nrow(occci_df) == 0) {
-      cci_data <- data.frame()
-      k_cci <- 0L
+    occci_mrwa_df <- if (kk_mrwa == 0L) data.frame() else do.call(rbind, out_list_mrwa[seq_len(kk_mrwa)])
+
+    if (nrow(occci_mrwa_df) == 0) {
+      cci_mrwa_data <- data.frame()
+      k_cci_mrwa <- 0L
     } else {
-      cci_data <- occci_df %>%
+      occci_mrwa_df$date <- as.Date(occci_mrwa_df$date)
+      cci_mrwa_data <- occci_mrwa_df %>%
         dplyr::transmute(
-          date = date,
+          date             = date,
           chlorophyll_mean = if ("chlor_a_mean" %in% names(.)) chlor_a_mean else NA_real_,
           chlorophyll_sd   = if ("chlor_a_sd"   %in% names(.)) chlor_a_sd   else NA_real_,
           chlorophyll_n    = if ("chlor_a_n"    %in% names(.)) chlor_a_n    else NA_real_
         )
-      k_cci <- nrow(cci_data)
+      k_cci_mrwa <- nrow(cci_mrwa_data)
     }
-
-    message("OC-CCI rows processed: ", k_cci)
-
-    if (exists("cci_data") && nrow(cci_data) > 0) {
-      valid_n <- cci_data %>%
-        dplyr::filter(
-          !is.na(chlorophyll_mean),
-          chlorophyll_n > 0
-        ) %>%
-        dplyr::pull(chlorophyll_n)
-      # Just to monitor
-      message("Mean n = ",   mean(valid_n,   na.rm = TRUE))
-      message("Median n = ", median(valid_n, na.rm = TRUE))
-    }
+    message("MRWA OC-CCI rows processed: ", k_cci_mrwa)
   }
 }
-          
+
 ## Format
 message("Formatting to standard format...")
 
@@ -430,9 +490,25 @@ if (!exists("k_cci") || is.na(k_cci) || k_cci == 0) {
   cci_formatted <- cci_daily %>%
     to_standard_chlora(site_id = buoy_site_id, mode = "cci")
 }
-          
+
+# MRWA CCI formatted or empty
+if (!exists("k_cci_mrwa") || is.na(k_cci_mrwa) || k_cci_mrwa == 0) {
+  message("No usable, new MRWA CCI observations; cci_mrwa_formatted will be empty.")
+  cci_mrwa_formatted <- empty_targets()
+} else {
+  cci_mrwa_formatted <- cci_mrwa_data %>%
+    dplyr::transmute(
+      date        = as.Date(date),
+      chlorophyll = as.numeric(chlorophyll_mean)
+    ) %>%
+    dplyr::mutate(
+      chlorophyll = dplyr::if_else(is.nan(chlorophyll), NA_real_, chlorophyll)
+    ) %>%
+    to_standard_chlora(site_id = mrwa_site_id, mode = "cci")
+}
+
 # Combine
-all_targets <- dplyr::bind_rows(buoy_formatted, cci_formatted)
+all_targets <- dplyr::bind_rows(buoy_formatted, cci_formatted, cci_mrwa_formatted)
 
 ## Append to existing data
 
