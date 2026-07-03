@@ -4,7 +4,8 @@
 ## Created: 02-18-2025
 
 library(rerddap)
-library(arrow)
+library(aws.s3)
+library(readr)
 library(dplyr)
 library(lubridate)
 library(foreach)
@@ -39,17 +40,17 @@ mrwa_site_id <- config$target_groups$Coastal$mrwa_site_id
 mrwa_lat     <- config$target_groups$Coastal$mrwa_lat
 mrwa_lon     <- config$target_groups$Coastal$mrwa_lon
 
-s3 <- arrow::s3_bucket(
-  config$s3_bucket_read,
-  endpoint_override = config$endpoint,
-  access_key = Sys.getenv("OSN_KEY"),
-  secret_key = Sys.getenv("OSN_SECRET"),
-  scheme = "https"
-)
+base_url <- gsub("https://", "", config$endpoint)
+Sys.setenv(AWS_ACCESS_KEY_ID     = Sys.getenv("OSN_KEY"),
+           AWS_SECRET_ACCESS_KEY = Sys.getenv("OSN_SECRET"),
+           AWS_DEFAULT_REGION    = "")
 
-old_data <- tryCatch(
-  arrow::read_csv_arrow(s3$path(filename)) %>% as.data.frame(),
-  error = function(e) {
+old_data <- tryCatch({
+  tmp <- tempfile(fileext = ".csv")
+  aws.s3::save_object(object = filename, bucket = config$s3_bucket_read,
+                      file = tmp, base_url = base_url, use_https = TRUE, region = "")
+  readr::read_csv(tmp, show_col_types = FALSE) %>% as.data.frame()
+}, error = function(e) {
     message("No existing targets file found. Creating a new one.")
     NULL
   }
@@ -372,7 +373,7 @@ progress_msg("CCI download", 0, total_days)
 
 message("Downloading OC-CCI data for MRWA site...")
 
-start_date_cci_mrwa <- as.Date("2006-01-01")
+start_date_cci_mrwa <- as.Date("2005-10-22")
 if (!is.null(old_data) && nrow(old_data) > 0) {
   old_cci_mrwa <- old_data[old_data$variable == "chlora_cci" & old_data$site_id == "2", , drop = FALSE]
   if (nrow(old_cci_mrwa) > 0) {
@@ -561,7 +562,10 @@ if (nrow(all_targets) == 0) {
   message("No new targets today; skipping write")
 } else {
   message("Writing updated targets back to S3...")
-  arrow::write_csv_arrow(new_data, sink = s3$path(filename))
+  tmp_out <- tempfile(fileext = ".csv")
+  readr::write_csv(new_data, tmp_out)
+  aws.s3::put_object(file = tmp_out, object = filename, bucket = config$s3_bucket_read,
+                     base_url = base_url, use_https = TRUE, region = "")
 }
 
 
