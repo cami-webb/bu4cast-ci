@@ -102,7 +102,7 @@ target_groups:
       random_walk_null: "https://hc-ping.com/a6e24ff5-827d-491c-b679-527a92af63c7"
     variable: ['chlora_buoy', 'chlora_cci', 'chlora_cci_corrected', 'chlora_mrwa']
     duration: ['P1D', 'P1D', 'P1D', 'P1D']
-    max_horizon: [35, 35, 35, 35]
+    max_horizon: [30, 30, 30, 30]
     buoy_lat: 43.022942490079
     buoy_lon: -70.5475341233827
     mrwa_site_id: "2"
