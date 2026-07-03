@@ -1,7 +1,14 @@
 ## Daily random walk with backfill
 
 RW_daily_forecast <- function(site, var, h, reference_date,
-                                      boot_number = 31, ...) {
+                                      boot_number = 31, targets = NULL, ...) {
+  if (is.null(targets)) {
+    if (exists("targets", envir = globalenv())) {
+      targets <- get("targets", envir = globalenv())
+    } else {
+      stop("targets not found: pass it explicitly or assign to global env")
+    }
+  }
   reference_date <- lubridate::as_date(reference_date)
 
   forecast_starts <- targets %>%

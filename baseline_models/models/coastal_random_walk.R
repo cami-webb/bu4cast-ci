@@ -31,7 +31,10 @@ run_coastal_random_walk <- function(reference_date, config, targets_all) {
            h = horizon,
            reference_date = reference_date)
 
-  RW_forecasts <- purrr::pmap_dfr(site_var_combinations, RW_daily_forecast)
+  targets_snap <- targets
+  RW_forecasts <- purrr::pmap_dfr(site_var_combinations, function(...) {
+    RW_daily_forecast(..., targets = targets_snap)
+  })
 
   if (nrow(RW_forecasts) == 0) {
     message("No forecasts generated for ", reference_date, ", skipping")
