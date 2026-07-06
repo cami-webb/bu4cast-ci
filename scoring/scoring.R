@@ -28,10 +28,27 @@ library(score4cast)
 con <- duckdbfs::cached_connection(tempfile())
 setup_s3(con)
 
-fc <- open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/score_me", conn = con) |>
-  filter(!is.na(model_id))
+fc <- tryCatch(
+  open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/score_me", conn = con) |>
+    filter(!is.na(model_id)),
+  error = function(e) {
+    message("No score_me files found, nothing to score: ", e$message)
+    NULL
+  }
+)
+
+if (is.null(fc)) {
+  message("Exiting early — no forecasts to score.")
+  quit(save = "no", status = 0)
+}
+
 groups <- fc |> distinct(project_id, duration, variable, model_id, family) |> collect()
 total  <- nrow(groups)
+
+if (total == 0) {
+  message("No new forecast groups to score.")
+  quit(save = "no", status = 0)
+}
 
 duckdbfs::close_connection(con)
 gc()
