@@ -98,7 +98,7 @@ last_observed_date <- targets |> select(datetime) |> distinct() |>
   filter(datetime == max(datetime)) |> pull(datetime)
 
 forecasts <-
-  open_dataset(paste0("s3://", forecast_bundled_parquet_bucket), conn = con) |>
+  open_dataset(paste0("s3://", forecast_bundled_parquet_bucket), conn = con, union_by_name = TRUE) |>
   filter(project_id == {project},
          datetime > {cut_off_date},
          datetime <= {last_observed_date},
