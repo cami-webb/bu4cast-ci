@@ -97,15 +97,12 @@ targets <- lapply(target_files, function(path) {
 last_observed_date <- targets |> select(datetime) |> distinct() |>
   filter(datetime == max(datetime)) |> pull(datetime)
 
-forecasts <-
-  open_dataset(paste0("s3://", forecast_bundled_parquet_bucket), conn = con, union_by_name = TRUE) |>
-  filter(project_id == {project},
-         datetime > {cut_off_date},
-         datetime <= {last_observed_date},
-         !is.na(model_id),
-         !is.na(parameter),
-         !is.na(prediction)
-  ) |>
+DBI::dbExecute(con, paste0(
+  "CREATE OR REPLACE VIEW forecast_view AS SELECT * FROM parquet_scan('s3://",
+  forecast_bundled_parquet_bucket, "**',
+  HIVE_PARTITIONING=TRUE, UNION_BY_NAME=TRUE, FILENAME=FALSE)"
+))
+forecasts <- dplyr::tbl(con, "forecast_view") |>
   mutate(family = ifelse(family == 'ensemble', "sample", family)) |>
   mutate(horizon = date_diff('day', as.POSIXct(reference_datetime), as.POSIXct(datetime))) |>
   filter(!(duration == "P1D" & horizon > 35))
