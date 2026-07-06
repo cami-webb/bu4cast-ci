@@ -9,7 +9,7 @@ noaa_endpoint: sdsc.osn.xsede.org
 submissions_endpoint: 'minio-s3.apps.shift.nerc.mghpcc.org'
 duckdb_secret_name: "s3_minio_osn"
 #scores_bucket: bio230014-bucket01/challenges/scores
-scores_bucket: 'bu4cast-ci-write/challenges/scores'
+scores_bucket: "bu4cast-ci-write/challenges/project_id=bu4cast/scores"
 forecasts_bucket: 'challenges/project_id=bu4cast/submissions'
 #summaries_bucket: bio230014-bucket01/challenges/forecasts
 submissions_bucket: challenges/project_id=bu4cast/submissions
