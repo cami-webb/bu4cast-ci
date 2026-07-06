@@ -110,11 +110,22 @@ forecasts <-
   mutate(horizon = date_diff('day', as.POSIXct(reference_datetime), as.POSIXct(datetime))) |>
   filter(!(duration == "P1D" & horizon > 35))
 
-scores <-
+scores <- tryCatch(
   open_dataset(paste0("s3://", scores_bundled_parquet_bucket), conn = con) |>
-  filter(project_id == {project},
-         datetime > {cut_off_date},
-         !is.na(observation))
+    filter(project_id == {project},
+           datetime > {cut_off_date},
+           !is.na(observation)),
+  error = function(e) {
+    message("No existing scores found, treating as empty: ", e$message)
+    dplyr::tibble(
+      project_id = character(), site_id = character(),
+      datetime = as.POSIXct(character()), duration = character(),
+      variable = character(), model_id = character(),
+      family = character(), reference_datetime = as.POSIXct(character()),
+      observation = numeric()
+    ) |> duckdbfs::as_dataset(conn = con)
+  }
+)
 
 tol <- 1e-2
 if (rescore) {
