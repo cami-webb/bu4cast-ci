@@ -10,11 +10,10 @@ run_coastal_random_walk <- function(reference_date, config, targets_all) {
 
   reference_date <- as_date(reference_date)
 
-  # Filter training data to < reference_date
+  # Filter training data to before reference_date
   targets <- targets_all %>%
-    filter(datetime < reference_date,
-           variable == "chlora_cci_corrected")
-
+    filter(datetime < reference_date)
+  
   if (nrow(targets) == 0 || all(is.na(targets$observation))) {
     message("No training data for ", reference_date, ", skipping")
     return(invisible(NULL))
