@@ -14,23 +14,30 @@ config <- yaml::read_yaml("challenge_configuration.yaml")
 null_start_date <- as_date(config$target_groups$Coastal$null_start_date)
 base_url <- gsub("https://", "", config$endpoint)
 
-# Read corrected targets
+# Read corrected targets (chlora_cci_corrected for both sites)
 corrected_url <- paste0(config$endpoint, "/", config$s3_bucket_read, "/",
                         config$target_groups$Coastal$targets_corrected_filepath)
 targets_all <- readr::read_csv(corrected_url, guess_max = 10000) %>%
   mutate(datetime = as_date(datetime))
 
-# Site 1: training = all data; forecasts from null_start_date to yesterday
-targets_site1 <- targets_all %>% filter(site_id == "1")
+# Read raw targets for chlora_mrwa (site 2 in-situ buoy)
+raw_url <- paste0(config$endpoint, "/", config$s3_bucket_read, "/",
+                  config$target_groups$Coastal$targets_filepath)
+raw_targets_mrwa <- readr::read_csv(raw_url, guess_max = 10000) %>%
+  mutate(datetime = as_date(datetime)) %>%
+  filter(site_id == "2", variable == "chlora_mrwa")
+
+# Site 1: chlora_cci_corrected only; forecasts from site 1 null start date to yesterday
+targets_site1 <- targets_all %>% filter(site_id == "1", variable == "chlora_cci_corrected")
 site1_dates   <- seq(null_start_date, Sys.Date() - 1, by = "day")
 
-# Site 2: training fixed through site_2_train_cutoff; forecasts for site_2_null_start_date to site_2_forecast_end
-# (producing 1-day-ahead forecasts covering site_2_train_cutoff through site_2_forecast_end + 1)
-SITE2_TRAIN_CUTOFF <- as_date(config$target_groups$Coastal$site_2_train_cutoff)
-SITE2_START        <- as_date(config$target_groups$Coastal$site_2_null_start_date)
-SITE2_END          <- as_date(config$target_groups$Coastal$site_2_forecast_end)
-targets_site2 <- targets_all %>%
-  filter(site_id == "2", datetime < SITE2_TRAIN_CUTOFF)
+# Site 2: both chlora_cci_corrected and chlora_mrwa; forecasts from site 2 null start date to forecast end
+SITE2_START <- as_date(config$target_groups$Coastal$site_2_null_start_date)
+SITE2_END   <- as_date(config$target_groups$Coastal$site_2_forecast_end)
+targets_site2 <- bind_rows(
+  targets_all %>% filter(site_id == "2", variable == "chlora_cci_corrected"),
+  raw_targets_mrwa
+)
 site2_dates <- seq(SITE2_START, SITE2_END, by = "day")
 
 # Get reference dates already uploaded for a given model
