@@ -18,13 +18,13 @@ base_url <- gsub("https://", "", config$endpoint)
 corrected_url <- paste0(config$endpoint, "/", config$s3_bucket_read, "/",
                         config$target_groups$Coastal$targets_corrected_filepath)
 targets_all <- readr::read_csv(corrected_url, guess_max = 10000) %>%
-  mutate(datetime = as_date(datetime))
+  mutate(datetime = as_date(datetime), site_id = as.character(site_id))
 
 # Read raw targets for chlora_mrwa (site 2 in-situ buoy)
 raw_url <- paste0(config$endpoint, "/", config$s3_bucket_read, "/",
                   config$target_groups$Coastal$targets_filepath)
 raw_targets_mrwa <- readr::read_csv(raw_url, guess_max = 10000) %>%
-  mutate(datetime = as_date(datetime)) %>%
+  mutate(datetime = as_date(datetime), site_id = as.character(site_id)) %>%
   filter(site_id == "2", variable == "chlora_mrwa")
 
 # Site 1: chlora_cci_corrected only; forecasts from site 1 null start date to yesterday
