@@ -145,7 +145,18 @@ bench::bench_time({
 })
 bench::bench_time({
   forecasts <- open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/forecasts/**", conn = con)
-  scores    <- open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/scores/**", conn = con)
+  scores    <- tryCatch(
+    open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/scores/**", conn = con),
+    error = function(e) {
+      message("No existing tmp scores found, treating as empty: ", e$message)
+      dplyr::tibble(project_id = character(), site_id = character(),
+                    datetime = as.POSIXct(character()), duration = character(),
+                    variable = character(), model_id = character(),
+                    family = character(), reference_datetime = as.POSIXct(character()),
+                    observation = numeric()) |>
+        duckdbfs::as_dataset(conn = con)
+    }
+  )
   targets   <- open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/targets/**", conn = con)
 })
 
