@@ -2,8 +2,6 @@
 # I would test this more to understand why it's not working 
 # This is also now in a for loop, which is different from the original, which was in parallel
 
-remotes::install_github("cboettig/duckdbfs", upgrade=FALSE)
-
 library(tidyverse)
 library(duckdbfs)
 library(duckdb)
@@ -123,68 +121,45 @@ for (path in model_paths) {
   print(paste("Processing:", path))
   bundled_path <- path |> str_replace(fixed("/parquet"), "/bundled-parquet")
   print(paste("Bundled Path:", bundled_path))
-  
+
   # Build S3 query paths
-  s3_query_path <- paste0(path, "**/*.parquet")
+  s3_query_path         <- paste0(path, "**/*.parquet")
   s3_query_bundled_path <- paste0(bundled_path, "**/*.parquet")
+  out_file              <- paste0(bundled_path, "part-0.parquet")
 
-  # Load all new data from parquet
+  # Check if existing bundled data exists
+  has_old <- tryCatch({
+    dbGetQuery(con, sprintf("SELECT COUNT(*) FROM read_parquet('%s', hive_partitioning=true)", 
+                            s3_query_bundled_path))[[1]] > 0
+  }, error = function(e) FALSE)
+
+  # Write directly S3→S3 via DuckDB COPY, no R data frame involved
   tryCatch({
-    # Read all parquet files with hive partitioning
-    query <- sprintf("
-      SELECT *
-      FROM read_parquet('%s', hive_partitioning = true)
-      WHERE model_id IS NOT NULL
-      AND parameter IS NOT NULL
-      AND prediction IS NOT NULL
-    ", s3_query_path)
-    
-    tmp_new <- dbGetQuery(con, query)
-    print(paste("Read", nrow(tmp_new), "rows"))
-    print(paste("Columns:", paste(colnames(tmp_new), collapse = ", ")))
-    
+    if (has_old) {
+      query <- sprintf("
+        COPY (
+          SELECT * FROM read_parquet('%s', hive_partitioning=true)
+          UNION ALL
+          SELECT * FROM read_parquet('%s', hive_partitioning=true)
+          WHERE model_id IS NOT NULL AND parameter IS NOT NULL AND prediction IS NOT NULL
+        ) TO '%s' (FORMAT PARQUET)",
+        s3_query_bundled_path, s3_query_path, out_file)
+    } else {
+      query <- sprintf("
+        COPY (
+          SELECT * FROM read_parquet('%s', hive_partitioning=true)
+          WHERE model_id IS NOT NULL AND parameter IS NOT NULL AND prediction IS NOT NULL
+        ) TO '%s' (FORMAT PARQUET)",
+        s3_query_path, out_file)
+    }
+    dbExecute(con, query)
+    print(paste("Wrote bundled parquet to", out_file))
   }, error = function(e) {
-    print(paste("Error reading new path ", path, ":", e$message))
+    print(paste("Error bundling", path, ":", e$message))
   })
-
-  # Load all old data from parquet
-  tmp_old <- tryCatch({
-    # Read all parquet files with hive partitioning
-    query_old <- sprintf("
-      SELECT *
-      FROM read_parquet('%s', hive_partitioning = true)
-    ", s3_query_bundled_path)
-    
-    tmp_old <- dbGetQuery(con, query_old)
-    print(paste("Read", nrow(tmp_old), "rows"))
-    print(paste("Columns:", paste(colnames(tmp_old), collapse = ", ")))
-
-    # Return data
-    tmp_old
-    
-  },
-  error = function(e) {
-    print(paste("No new data for ", s3_query_bundled_path))
-    NULL
-  })
-  
-  # Combine if old data was found
-  if(!is.null(old)) {
-    bundled_dir <- bundled_path |> str_replace(fixed("s3://"), "osn/") |> mc_ls(details = TRUE)
-    mc_bundled_path <- bundled_dir |> filter(!is_folder) |> pull(path)
-    stopifnot(length(mc_bundled_path) == 1)
-    bundled_path <- mc_bundled_path |> str_replace(fixed("osn/"), fixed("s3://"))
-  
-    new <- union(tmp_old, tmp_new)
-  } else {
-    new <- tmp_new
-  }
-
-  # Write data to bundled
-  new |> write_dataset(bundled_path, options = list("PER_THREAD_OUTPUT false"))
 
   # Create archived parquet
-  mc_path <- path |> str_replace(fixed("s3://"), "osn/")
+  mc_path  <- path |> str_replace(fixed("s3://"), "osn/")
   dest_path <- mc_path |> str_replace(fixed("/parquet"), "/archive-parquet")
   mc_mv(mc_path, dest_path, recursive = TRUE)
 
@@ -201,120 +176,9 @@ count <- if (nrow(bundled_contents) == 0) 0 else sum(!bundled_contents$is_folder
 print(count)
 
 # This is a function from the previous iteration
+# bundle_me <- function(path) { ... }
 
-bundle_me <- function(path) {
-  
-  print(paste("Processing:", path))
-  
-  # Create a new connection for this function call
-  con = duckdbfs::cached_connection(tempfile())
-  
-  # Use the same S3 credentials setup
-  on.exit({
-    duckdbfs::close_connection(con)
-    gc()
-  })
-  
-  # Create bundled path: replace /parquet/ with /bundled-parquet/
-  bundled_path <- path |> 
-    str_replace(fixed("/parquet/"), "/bundled-parquet/")
-  
-  print(paste("Bundled path:", bundled_path))
-  
-  # Use DuckDB to read and filter the data
-  # Create a temporary view from the partitioned parquet data
-  tryCatch({
-    # Use DuckDB's read_parquet with glob pattern
-    sql_query <- sprintf(
-      "CREATE OR REPLACE TABLE tmp_new_data AS 
-       SELECT * 
-       FROM read_parquet('%s/**/*.parquet', HIVE_PARTITIONING=TRUE)
-       WHERE model_id IS NOT NULL
-         AND parameter IS NOT NULL
-         AND prediction IS NOT NULL",
-      path
-    )
-    
-    DBI::dbExecute(con, sql_query)
-    
-    # Write filtered data to local temporary parquet file
-    DBI::dbExecute(con, "COPY tmp_new_data TO 'tmp_new.parquet' (FORMAT PARQUET)")
-    
-    print('Created tmp_new.parquet')
-    
-  }, error = function(e) {
-    # Fallback: Use old approach
-    print(paste("Error with DuckDB approach:", e$message))
-    print("Trying arrow/dplyr approach...")
-    
-    open_dataset(path, partitioning = hive_partitioning()) |>
-      filter(!is.na(model_id),
-             !is.na(parameter),
-             !is.na(prediction)) |>
-      write_dataset("tmp_new.parquet")
-  })
-  
-  # Check for existing bundled data
-  old <- tryCatch({
-    # Try to read existing bundled data
-    sql_query_old <- sprintf(
-      "CREATE OR REPLACE TABLE tmp_old AS 
-       SELECT * FROM read_parquet('%s*.parquet')",
-      bundled_path
-    )
-    
-    DBI::dbExecute(con, sql_query_old)
-    
-    # Write old data to local file for arrow to read
-    DBI::dbExecute(con, "COPY tmp_old TO 'tmp_old.parquet' (FORMAT PARQUET)")
-    
-    open_dataset("tmp_old.parquet")
-  }, error = function(e) {
-    print(paste("No existing bundled data:", e$message))
-    NULL
-  })
-  
-  # Load new data
-  new <- open_dataset("tmp_new.parquet")
-  
-  # Merge if old exists
-  if(!is.null(old)) {
-    new <- union(old, new)
-    print("Merged with existing bundled data")
-  }
-  
-  # Write merged data to bundled path
-  new |>
-    write_dataset(bundled_path,
-                  options = list("PER_THREAD_OUTPUT" = FALSE))
-  
-  print(paste('Wrote merged data to:', bundled_path))
-  
-  # Archive original data
-  mc_path <- path |> str_replace(fixed("s3://"), "osn/")
-  dest_path <- mc_path |>
-    str_replace(fixed("/parquet/"), "/archive-parquet/")
-  
-  if(mc_dir_exists(mc_path)) {
-    mc_mv(mc_path, dest_path, recursive = TRUE)
-    print('Archived original data')
-  }
-  
-  # Clean up temporary files
-  if(file.exists("tmp_new.parquet")) unlink("tmp_new.parquet")
-  if(file.exists("tmp_old.parquet")) unlink("tmp_old.parquet")
-  
-  invisible(path)
-}
-
-# This is what was in the original file and is how the bundle me function runs
-
-# # Run it
-# print("Running result")
-# result <- bundle_me_simple_working(model_paths[1])
-# print("Result ran")
-
-# We use future_apply framework to show progress while being robust to OOM kils.
+# We use future_apply framework to show progress while being robust to OOM kills.
 # We are not actually running on multi-core, which would be RAM-inefficient
 future::plan(future::sequential)
 
@@ -327,13 +191,9 @@ future::plan(future::sequential)
 #   },  future.seed = TRUE)
 # }
 
-
 # bench::bench_time({
 #   out <- safe_bundles(model_paths)
 # })
-# # print(out)
-
-
 
 # # bundled count at end
 # count <- open_dataset(paste0("s3://", forecast_bundled_parquet_bucket),
@@ -341,8 +201,6 @@ future::plan(future::sequential)
 #                       anonymous = TRUE) |>
 #   count()
 # print(count)
-
-
 
 # most_recent <- open_dataset(paste0("s3://", forecast_bundled_parquet_bucket),
 #              s3_endpoint = config$endpoint,
@@ -352,8 +210,5 @@ future::plan(future::sequential)
 #   arrange(desc(most_recent))
 # print(most_recent)
 
-
-
 # should we slice_max(pub_time) to ensure only most recent pub_time if duplicates submitted?
 # grouping <- c("model_id", "reference_datetime", "site_id", "datetime", "family", "variable", "duration", "project_id")
-

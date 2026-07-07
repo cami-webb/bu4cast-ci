@@ -9,6 +9,7 @@ noaa_endpoint: sdsc.osn.xsede.org
 submissions_endpoint: 'minio-s3.apps.shift.nerc.mghpcc.org'
 duckdb_secret_name: "s3_minio_osn"
 #scores_bucket: bio230014-bucket01/challenges/scores
+scores_bucket: "bu4cast-ci-write/challenges/project_id=bu4cast/scores"
 forecasts_bucket: 'challenges/project_id=bu4cast/submissions'
 #summaries_bucket: bio230014-bucket01/challenges/forecasts
 submissions_bucket: challenges/project_id=bu4cast/submissions
@@ -93,19 +94,27 @@ target_groups:
     health_check_url: "https://hc-ping.com/af0bdaf6-3ec8-434b-bafd-d8fecc0508af"
     health_check_url_c: "https://hc-ping.com/323ad66e-b20d-4b41-b2f5-06df0bac6085"
     null_start_date: "2025-07-01"
+    site_2_null_start_date: "2022-10-01"
+    site_2_forecast_end: "2023-09-25"
     health_checks:
       climatology_null: "https://hc-ping.com/2b129dd0-ede7-45dc-8dac-a4347e399463"
       random_walk_null: "https://hc-ping.com/a6e24ff5-827d-491c-b679-527a92af63c7"
-    variable: ['chlora_buoy', 'chlora_cci', 'chlora_cci_corrected']
-    duration: ['P1D', 'P1D', 'P1D']
-    max_horizon: [35, 35, 35]
+    variable: ['chlora_buoy', 'chlora_cci', 'chlora_cci_corrected', 'chlora_mrwa']
+    duration: ['P1D', 'P1D', 'P1D', 'P1D']
+    max_horizon: [30, 30, 30, 30]
     buoy_lat: 43.022942490079
     buoy_lon: -70.5475341233827
+    mrwa_site_id: "2"
+    mrwa_lat: 42.52317
+    mrwa_lon: -70.56633
     group_vars:
       chlora_buoy:
         duration: "P1D"
         max_horizon: 30
       chlora_cci:
+        duration: "P1D"
+        max_horizon: 30
+      chlora_mrwa:
         duration: "P1D"
         max_horizon: 30
 noaa_forecasts:

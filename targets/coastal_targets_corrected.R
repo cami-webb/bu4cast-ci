@@ -2,7 +2,8 @@
 ## Reads uncorrected coastal-targets.csv, applies ratio-based corrections, and writes to S3
 ## Author: Cami Webb, cwebb16@bu.edu
 
-library(arrow)
+library(aws.s3)
+library(readr)
 library(dplyr)
 library(lubridate)
 library(tidyr)
@@ -15,16 +16,16 @@ project_id     <- config$project_id
 raw_filename   <- config$target_groups$Coastal$targets_filepath
 corr_filename  <- config$target_groups$Coastal$targets_corrected_filepath
 
-s3 <- arrow::s3_bucket(
-  config$s3_bucket_read,
-  endpoint_override = config$endpoint,
-  access_key = Sys.getenv("OSN_KEY"),
-  secret_key = Sys.getenv("OSN_SECRET"),
-  scheme = "https"
-)
+base_url <- gsub("https://", "", config$endpoint)
+Sys.setenv(AWS_ACCESS_KEY_ID     = Sys.getenv("OSN_KEY"),
+           AWS_SECRET_ACCESS_KEY = Sys.getenv("OSN_SECRET"),
+           AWS_DEFAULT_REGION    = "")
 
 message("Reading uncorrected targets from S3...")
-raw_data <- arrow::read_csv_arrow(s3$path(raw_filename)) %>% as.data.frame()
+tmp_in <- tempfile(fileext = ".csv")
+aws.s3::save_object(object = raw_filename, bucket = config$s3_bucket_read,
+                    file = tmp_in, base_url = base_url, use_https = TRUE, region = "")
+raw_data <- readr::read_csv(tmp_in, show_col_types = FALSE) %>% as.data.frame()
 message("Rows in raw data: ", nrow(raw_data))
 
 ## Compute correction factors (Option A: cutoff first, then monthly median)
@@ -78,8 +79,11 @@ message("Applying corrections to CCI data...")
 buoy_data <- raw_data %>%
   dplyr::filter(variable == "chlora_buoy")
 
+mrwa_data <- raw_data %>%
+  dplyr::filter(variable == "chlora_mrwa")
+
 cci_corrected <- raw_data %>%
-  dplyr::filter(variable == "chlora_cci") %>%
+  dplyr::filter(variable == "chlora_cci", site_id == "1") %>%
   dplyr::mutate(date = as.Date(substr(datetime, 1, 10))) %>%
   dplyr::filter(!date %in% exclude_dates) %>%
   dplyr::mutate(month = lubridate::month(date)) %>%
@@ -94,14 +98,34 @@ cci_corrected <- raw_data %>%
   dplyr::select(-month, -median_ratio, -date) %>%
   dplyr::mutate(variable = "chlora_cci_corrected")
 
-corrected_data <- dplyr::bind_rows(buoy_data, cci_corrected) %>%
+# Apply same monthly correction factors to site 2 CCI
+cci_corrected_mrwa <- raw_data %>%
+  dplyr::filter(variable == "chlora_cci", site_id == "2") %>%
+  dplyr::mutate(date = as.Date(substr(datetime, 1, 10))) %>%
+  dplyr::filter(!date %in% exclude_dates) %>%
+  dplyr::mutate(month = lubridate::month(date)) %>%
+  dplyr::left_join(correction_factor, by = "month") %>%
+  dplyr::mutate(
+    observation = dplyr::if_else(
+      !is.na(median_ratio) & median_ratio > 0,
+      observation / median_ratio,
+      observation
+    )
+  ) %>%
+  dplyr::select(-month, -median_ratio, -date) %>%
+  dplyr::mutate(variable = "chlora_cci_corrected")
+
+corrected_data <- dplyr::bind_rows(buoy_data, cci_corrected, cci_corrected_mrwa, mrwa_data) %>%
   dplyr::arrange(site_id, datetime, variable)
 
 message("Rows in corrected data: ", nrow(corrected_data))
 
 ## Write to S3
 message("Writing corrected targets to S3...")
-arrow::write_csv_arrow(corrected_data, sink = s3$path(corr_filename))
+tmp_out <- tempfile(fileext = ".csv")
+readr::write_csv(corrected_data, tmp_out)
+aws.s3::put_object(file = tmp_out, object = corr_filename, bucket = config$s3_bucket_read,
+                   base_url = base_url, use_https = TRUE, region = "")
 
 message("Pinging health check...")
 tryCatch(
