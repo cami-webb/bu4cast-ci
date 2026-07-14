@@ -29,7 +29,7 @@ raw_targets_mrwa <- readr::read_csv(raw_url, guess_max = 10000) %>%
 
 # Site 1: chlora_cci_corrected only; forecasts from site 1 null start date to yesterday
 targets_site1 <- targets_all %>% filter(site_id == "1", variable == "chlora_cci_corrected")
-site1_dates   <- seq(null_start_date, Sys.Date() - 1, by = "day")
+site1_dates   <- seq(null_start_date, as_date(config$target_groups$Coastal$site_2_forecast_end), by = "day")
 
 # Site 2: both chlora_cci_corrected and chlora_mrwa; forecasts from site 2 null start date to forecast end
 SITE2_START <- as_date(config$target_groups$Coastal$site_2_null_start_date)
