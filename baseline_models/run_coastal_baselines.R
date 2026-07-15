@@ -76,13 +76,13 @@ run_site_dates <- function(run_fn, dates, targets, label) {
   }
 }
 
+targets_combined <- bind_rows(targets_site1, targets_site2)
+all_dates        <- site1_dates  # site2_dates are all within site1_dates
+
 # Climatology
-run_site_dates(run_coastal_climatology, site1_dates, targets_site1, "climatology")
-run_site_dates(run_coastal_climatology, site2_dates, targets_site2, "climatology")
+run_site_dates(run_coastal_climatology, all_dates, targets_combined, "climatology")
 httr::GET(config$target_groups$Coastal$health_checks$climatology_null)
 
 # Random walk
-run_site_dates(run_coastal_random_walk, site1_dates, targets_site1, "randomWalk")
-run_site_dates(run_coastal_random_walk, site2_dates, targets_site2, "randomWalk")
+run_site_dates(run_coastal_random_walk, all_dates, targets_combined, "randomWalk")
 httr::GET(config$target_groups$Coastal$health_checks$random_walk_null)
-
