@@ -108,6 +108,11 @@ target_groups:
     mrwa_lat: 42.52317
     mrwa_lon: -70.56633
     a01_flntus_url: "http://gyre.umeoce.maine.edu/data/gomoos/buoy/archive/A01/realtime/A01.optics_s.std_flntus.realtime.nc"
+    a01_met_url: "http://gyre.umeoce.maine.edu/data/gomoos/buoy/archive/A01/realtime/A01.met.realtime.nc"
+    a01_sbe37_1m_url: "http://gyre.umeoce.maine.edu/data/gomoos/buoy/archive/A01/realtime/A01.sbe37.realtime.1m.nc"
+    a01_sbe37_20m_url: "http://gyre.umeoce.maine.edu/data/gomoos/buoy/archive/A01/realtime/A01.sbe37.realtime.20m.nc"
+    a01_doppler_url: "http://gyre.umeoce.maine.edu/data/gomoos/buoy/archive/A01/realtime/A01.doppler.realtime.nc"
+    a01_drivers_filepath: "challenges/project_id=bu4cast/drivers/a01_drivers.csv"
     group_vars:
       chlora_buoy:
         duration: "P1D"

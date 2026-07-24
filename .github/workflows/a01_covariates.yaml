@@ -1,0 +1,28 @@
+name: A01 Buoy Drivers Download
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 13 * * *'
+
+jobs:
+  r-job:
+    runs-on: ubuntu-latest
+
+    env:
+      OSN_KEY: ${{ secrets.OSN_KEY }}
+      OSN_SECRET: ${{ secrets.OSN_SECRET }}
+
+    container: eco4cast/rocker-neon4cast:latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install R packages
+        run: |
+          Rscript -e 'options(repos=c(CRAN="https://cloud.r-project.org"))'
+          Rscript -e 'pkgs <- c("ncdf4","dplyr","lubridate","readr","yaml","aws.s3"); need <- pkgs[!pkgs %in% rownames(installed.packages())]; if(length(need)) install.packages(need, Ncpus = 2)'
+
+      - name: Run A01 Covariates Script
+        run: |
+          Rscript drivers/a01_covariates.R
