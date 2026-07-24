@@ -96,6 +96,7 @@ target_groups:
     null_start_date: "2021-01-01"
     site_2_null_start_date: "2021-01-01"
     site_2_forecast_end: "2021-12-31"
+    daily_start_date: "2025-07-31"
     health_checks:
       climatology_null: "https://hc-ping.com/2b129dd0-ede7-45dc-8dac-a4347e399463"
       random_walk_null: "https://hc-ping.com/a6e24ff5-827d-491c-b679-527a92af63c7"
