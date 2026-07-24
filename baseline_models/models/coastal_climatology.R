@@ -5,7 +5,6 @@ run_coastal_climatology <- function(reference_date, config, targets_all) {
   library(tidyverse)
   library(lubridate)
   library(aws.s3)
-  library(imputeTS)
 
   reference_date <- as_date(reference_date)
 
@@ -43,7 +42,7 @@ run_coastal_climatology <- function(reference_date, config, targets_all) {
     group_by(site_id, variable) %>%
     filter(sum(!is.na(mean_val)) >= 2) %>%
     mutate(
-      mu    = imputeTS::na_interpolation(mean_val),
+      mu    = mean_val,
       # fall back to sd of climatology means when DOY sd is unavailable
       sigma = coalesce(median(sd_val, na.rm = TRUE), sd(mean_val, na.rm = TRUE))
     ) %>%
