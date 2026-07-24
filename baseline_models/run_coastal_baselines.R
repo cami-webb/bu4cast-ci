@@ -29,7 +29,7 @@ raw_targets_mrwa <- readr::read_csv(raw_url, guess_max = 10000) %>%
 
 # Site 1: chlora_cci_corrected only; forecasts from site 1 null start date to yesterday
 targets_site1 <- targets_all %>% filter(site_id == "1", variable == "chlora_cci_corrected")
-site1_dates   <- seq(null_start_date, Sys.Date() - 1, by = "day")
+site1_dates   <- seq(null_start_date, as_date(config$target_groups$Coastal$site_2_forecast_end), by = "day")
 
 # Site 2: both chlora_cci_corrected and chlora_mrwa; forecasts from site 2 null start date to forecast end
 SITE2_START <- as_date(config$target_groups$Coastal$site_2_null_start_date)
@@ -76,13 +76,13 @@ run_site_dates <- function(run_fn, dates, targets, label) {
   }
 }
 
+targets_combined <- bind_rows(targets_site1, targets_site2)
+all_dates        <- site1_dates  # site2_dates are all within site1_dates
+
 # Climatology
-run_site_dates(run_coastal_climatology, site1_dates, targets_site1, "climatology")
-run_site_dates(run_coastal_climatology, site2_dates, targets_site2, "climatology")
+run_site_dates(run_coastal_climatology, all_dates, targets_combined, "climatology")
 httr::GET(config$target_groups$Coastal$health_checks$climatology_null)
 
 # Random walk
-run_site_dates(run_coastal_random_walk, site1_dates, targets_site1, "randomWalk")
-run_site_dates(run_coastal_random_walk, site2_dates, targets_site2, "randomWalk")
+run_site_dates(run_coastal_random_walk, all_dates, targets_combined, "randomWalk")
 httr::GET(config$target_groups$Coastal$health_checks$random_walk_null)
-
