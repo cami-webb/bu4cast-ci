@@ -67,7 +67,12 @@ print('mc access works')
 
 remote_path <- paste0("osn/", forecast_parquet_bucket)
 contents <- mc_ls(remote_path, recursive = TRUE, details = TRUE)
-data_paths <- contents |> filter(!is_folder) |> pull(path)
+data_paths <- if (nrow(contents) == 0) character(0) else contents |> filter(!is_folder) |> pull(path)
+
+if (length(data_paths) == 0) {
+  print("No new parquet files to bundle -- nothing in parquet/ since the last run. Exiting cleanly.")
+  quit(save = "no", status = 0)
+}
 
 # model paths are paths with at least one reference_datetime containing data files
 model_paths <-
