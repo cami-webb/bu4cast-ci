@@ -53,7 +53,7 @@ get_existing_dates <- function(model_name) {
   }
   unique(c(
     get_dates_from_prefix(config$forecasts_bucket),
-    get_dates_from_prefix("challenges/project_id=bu4cast/raw-submissions")
+    get_dates_from_prefix("write/challenges/project_id=bu4cast/raw-submissions")
   ))
 }
 
