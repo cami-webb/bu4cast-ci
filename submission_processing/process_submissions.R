@@ -95,7 +95,7 @@ if(length(submissions) > 0){
     TYPE S3,
     KEY_ID '%s',
     SECRET '%s',
-    ENDPOINT 'https://minio-s3.apps.shift.nerc.mghpcc.org',
+    ENDPOINT 'https://uri.osn.mghpcc.org',
     REGION 'us-east-1',
     USE_SSL TRUE
   )
@@ -207,7 +207,7 @@ if(length(submissions) > 0){
         print(head(fc))
         
         # Add in a parquet for the read bucket
-        s3_read$CreateDir(paste0("parquet/"))
+        s3_read$CreateDir(paste0("read/parquet/"))
 
         ## arrow write has gone nuts... let's update
         # Using duckdbfs
@@ -220,7 +220,7 @@ if(length(submissions) > 0){
         print("creating summaries")
         
         success <- tryCatch({
-          s3_read$CreateDir(paste0("summaries"))
+          s3_read$CreateDir(paste0("read/summaries"))
           fc |>
             dplyr::summarise(prediction = mean(prediction), .by = dplyr::any_of(c("site_id", "datetime", "reference_datetime", "family", "duration", "model_id",
                                                                                   "parameter", "pub_datetime", "reference_date", "variable", "project_id"))) |>

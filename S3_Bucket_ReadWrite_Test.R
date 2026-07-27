@@ -11,9 +11,9 @@ library(fs)
 
 
 # Define link and endpoint override
-OUR_LINK_read = 'bu4cast-ci-read'
-OUR_LINK_write = 'bu4cast-ci-write'
-OUR_ENDPOINT_OVERRIDE = 'https://minio-s3.apps.shift.nerc.mghpcc.org'
+OUR_LINK_read = 'bu4cast-ci/read'
+OUR_LINK_write = 'bu4cast-ci/write'
+OUR_ENDPOINT_OVERRIDE = 'https://uri.osn.mghpcc.org'
 
 
 if (Sys.getenv("GITHUB_ACTIONS") == "true") {

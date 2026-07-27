@@ -2,27 +2,27 @@
 project_id: bu4cast
 github_repo: eco4cast/neon4cast-ci/bu4cast-ci
 #S3 bucket information
-s3_bucket_read: 'bu4cast-ci-read'
-s3_bucket_write: 'bu4cast-ci-write'
-endpoint: 'https://minio-s3.apps.shift.nerc.mghpcc.org'
+s3_bucket_read: 'bu4cast-ci'
+s3_bucket_write: 'bu4cast-ci'
+endpoint: 'https://uri.osn.mghpcc.org'
 noaa_endpoint: sdsc.osn.xsede.org
-submissions_endpoint: 'minio-s3.apps.shift.nerc.mghpcc.org'
+submissions_endpoint: 'uri.osn.mghpcc.org'
 duckdb_secret_name: "s3_minio_osn"
 #scores_bucket: bio230014-bucket01/challenges/scores
-scores_bucket: "bu4cast-ci-write/challenges/project_id=bu4cast/scores"
-forecasts_bucket: 'challenges/project_id=bu4cast/submissions'
+scores_bucket: "bu4cast-ci/write/challenges/project_id=bu4cast/scores"
+forecasts_bucket: 'write/challenges/project_id=bu4cast/submissions'
 #summaries_bucket: bio230014-bucket01/challenges/forecasts
-submissions_bucket: challenges/project_id=bu4cast/submissions
-sub_parquet_bucket: 's3://bu4cast-ci-write/challenges/project_id=bu4cast/parquet'
-processed_sub_bucket: 's3://bu4cast-ci-write/challenges/project_id=bu4cast/processed_submissions'
-submissions_write_bucket: bu4cast-ci-write/bu4cast-ci-write/challenges/project_id=bu4cast/submissions/
-raw_submissions_bucket: bu4cast-ci-write/bu4cast-ci-write/challenges/project_id=bu4cast/raw-submissions
+submissions_bucket: write/challenges/project_id=bu4cast/submissions
+sub_parquet_bucket: 's3://bu4cast-ci/write/challenges/project_id=bu4cast/parquet'
+processed_sub_bucket: 's3://bu4cast-ci/write/challenges/project_id=bu4cast/processed_submissions'
+submissions_write_bucket: bu4cast-ci/bu4cast-ci/write/challenges/project_id=bu4cast/submissions/
+raw_submissions_bucket: bu4cast-ci/bu4cast-ci/write/challenges/project_id=bu4cast/raw-submissions
 #noaa_forecast_bucket: bio230014-bucket01/neon4cast-drivers/noaa/gefs-v12
-targets_bucket: 'challenges/project_id=bu4cast/targets'
-target_metadata_bucket: 'challenges/project_id=bu4cast/metadata'
-field_sites_path: 'challenges/project_id=bu4cast/metadata/field_sites.csv'
-student_resources_bucket: 'challenges/project_id=bu4cast/students'
-drivers_bucket: 'challenges/project_id=bu4cast/drivers'
+targets_bucket: 'read/challenges/project_id=bu4cast/targets'
+target_metadata_bucket: 'read/challenges/project_id=bu4cast/metadata'
+field_sites_path: 'read/challenges/project_id=bu4cast/metadata/field_sites.csv'
+student_resources_bucket: 'read/challenges/project_id=bu4cast/students'
+drivers_bucket: 'read/challenges/project_id=bu4cast/drivers'
 gefs_start_date: "2025-12-01"
 #archive_bucket: bio230014-bucket01/challenges/archive
 #model_metadata_bucket: bio230014-bucket01/challenges/metadata/model_id
@@ -34,12 +34,12 @@ gefs_start_date: "2025-12-01"
 target_groups:
   Urban:
     target_name: "urban"
-    targets_filepath: "challenges/project_id=bu4cast/targets/urban-targets.csv"
-    site_metadata_filepath: "challenges/project_id=bu4cast/metadata/urban-targets-sites.csv"
-    units_metadata_filepath: "challenges/project_id=bu4cast/metadata/urban-targets-units.csv"
-    targets_weblink: "https://minio-s3.apps.shift.nerc.mghpcc.org/bu4cast-ci-read/challenges/project_id=bu4cast/targets/urban-targets.csv"
-    targets_sites_weblink: "https://minio-s3.apps.shift.nerc.mghpcc.org/bu4cast-ci-read/challenges/project_id=bu4cast/metadata/urban-targets-sites.csv"
-    targets_units_weblink: "https://minio-s3.apps.shift.nerc.mghpcc.org/bu4cast-ci-read/challenges/project_id=bu4cast/metadata/urban-targets-units.csv"
+    targets_filepath: "read/challenges/project_id=bu4cast/targets/urban-targets.csv"
+    site_metadata_filepath: "read/challenges/project_id=bu4cast/metadata/urban-targets-sites.csv"
+    units_metadata_filepath: "read/challenges/project_id=bu4cast/metadata/urban-targets-units.csv"
+    targets_weblink: "https://uri.osn.mghpcc.org/bu4cast-ci/read/challenges/project_id=bu4cast/targets/urban-targets.csv"
+    targets_sites_weblink: "https://uri.osn.mghpcc.org/bu4cast-ci/read/challenges/project_id=bu4cast/metadata/urban-targets-sites.csv"
+    targets_units_weblink: "https://uri.osn.mghpcc.org/bu4cast-ci/read/challenges/project_id=bu4cast/metadata/urban-targets-units.csv"
     null_start_date: "2025-07-01"
     health_checks:
       climatology_null: "https://hc-ping.com/3fde281d-409b-4eed-b497-46dc1c64b9ae"
@@ -67,7 +67,7 @@ target_groups:
         #var_citation: "Olsson, F., C.C. Carey, C. Boettiger, G. Harrison, R. Ladwig, M.F. Lapeyrolerie, A.S.L. Lewis, M.E. Lofton, F. Motealegre-Mora, J.S. Rebaey, C.J. Robbins. X. Yang, and R.Q. Thomas. 2025. What can we learn from 100,000 freshwater forecasts? A synthesis from the NEON Ecological Forecasting Challenge. Ecological Applications 35:e70004 https://doi.org/10.1002/eap.70004"
   TropicalDisease:
     target_name: "tropical-disease"
-    targets_filepath: "challenges/project_id=bu4cast/targets/tropical-disease-targets.csv"
+    targets_filepath: "read/challenges/project_id=bu4cast/targets/tropical-disease-targets.csv"
     variable: ['nee','le'] # update
     duration: ['P1D','P1D'] # update
     max_horizon: [35, 35] # update
@@ -86,11 +86,11 @@ target_groups:
         #var_citation: "None"
   Coastal:
     target_name: "coastal"
-    targets_filepath: "challenges/project_id=bu4cast/targets/coastal-targets.csv"
-    targets_corrected_filepath: "challenges/project_id=bu4cast/targets/coastal-targets-corrected.csv"
-    site_metadata_filepath: "bu4cast-ci-read/challenges/project_id=bu4cast/metadata/coastal-targets-sites.csv"
-    targets_weblink: "https://minio-s3.apps.shift.nerc.mghpcc.org/bu4cast-ci-read/challenges/project_id=bu4cast/targets/coastal-targets.csv"
-    targets_sites_weblink: "https://minio-s3.apps.shift.nerc.mghpcc.org/bu4cast-ci-read/challenges/project_id=bu4cast/metadata/coastal-targets-sites.csv"
+    targets_filepath: "read/challenges/project_id=bu4cast/targets/coastal-targets.csv"
+    targets_corrected_filepath: "read/challenges/project_id=bu4cast/targets/coastal-targets-corrected.csv"
+    site_metadata_filepath: "bu4cast-ci/read/challenges/project_id=bu4cast/metadata/coastal-targets-sites.csv"
+    targets_weblink: "https://uri.osn.mghpcc.org/bu4cast-ci/read/challenges/project_id=bu4cast/targets/coastal-targets.csv"
+    targets_sites_weblink: "https://uri.osn.mghpcc.org/bu4cast-ci/read/challenges/project_id=bu4cast/metadata/coastal-targets-sites.csv"
     health_check_url: "https://hc-ping.com/af0bdaf6-3ec8-434b-bafd-d8fecc0508af"
     health_check_url_c: "https://hc-ping.com/323ad66e-b20d-4b41-b2f5-06df0bac6085"
     null_start_date: "2021-01-01"
@@ -113,7 +113,7 @@ target_groups:
     a01_sbe37_1m_url: "http://gyre.umeoce.maine.edu/data/gomoos/buoy/archive/A01/realtime/A01.sbe37.realtime.1m.nc"
     a01_sbe37_20m_url: "http://gyre.umeoce.maine.edu/data/gomoos/buoy/archive/A01/realtime/A01.sbe37.realtime.20m.nc"
     a01_doppler_url: "http://gyre.umeoce.maine.edu/data/gomoos/buoy/archive/A01/realtime/A01.doppler.realtime.nc"
-    a01_drivers_filepath: "challenges/project_id=bu4cast/drivers/a01_drivers.csv"
+    a01_drivers_filepath: "read/challenges/project_id=bu4cast/drivers/a01_drivers.csv"
     group_vars:
       chlora_buoy:
         duration: "P1D"

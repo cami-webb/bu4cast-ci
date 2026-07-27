@@ -21,7 +21,7 @@ If you would like to use Python, then you have to have a Python environment set 
 1. Go to https://www.anaconda.com/download and scroll down to Miniconda Installers.
 Download the correct installer for your computer. Complete the installation steps.
 
-2. Download the following yaml file: https://minio-s3.apps.shift.nerc.mghpcc.org/bu4cast-ci-read/challenges/targets/project_id=bu4cast/dataclass_env.yaml
+2. Download the following yaml file: https://uri.osn.mghpcc.org/bu4cast-ci/read/challenges/targets/project_id=bu4cast/dataclass_env.yaml
 
 3. Open a Terminal (macOS) or Anaconda Prompt (Windows) window.
 
@@ -62,7 +62,7 @@ We will test reading to the S3 Bucket with the urban targets data, but I have
 included the urls for all 3.
 
 ```{r}
-base_url = 'https://minio-s3.apps.shift.nerc.mghpcc.org/bu4cast-ci-read/challenges/project_id=bu4cast/targets/'
+base_url = 'https://uri.osn.mghpcc.org/bu4cast-ci/read/challenges/project_id=bu4cast/targets/'
 urban_url = paste(base_url, 'urban-targets.csv', sep = "")
 disease_url = paste(base_url, 'tropical-disease-targets.csv', sep = "")
 coastal_url = paste(base_url, 'coastal-targets.csv', sep = "")
@@ -72,7 +72,7 @@ print(test_read_urban)
 ```
 
 ```{python}
-base_url = 'https://minio-s3.apps.shift.nerc.mghpcc.org/bu4cast-ci-read/challenges/project_id=bu4cast/targets/'
+base_url = 'https://uri.osn.mghpcc.org/bu4cast-ci/read/challenges/project_id=bu4cast/targets/'
 urban_url = base_url + 'urban-targets.csv'
 disease_url = base_url + 'tropical-disease-targets.csv'
 coastal_url = base_url + 'coastal-targets.csv'
@@ -104,7 +104,7 @@ write.csv(test_data, test_file, row.names = FALSE)
 # Create filename
 challenge_name_example = 'test'
 team_name_example = 'KAIYA' ## FILL IN WITH YOUR OWN TEAM NAME EXAMPLE
-url <- paste0("https://minio-s3.apps.shift.nerc.mghpcc.org/bu4cast-ci-write/challenges/project_id=bu4cast/forecasts/", challenge_name_example, "/",team_name_example, "-submission.csv")
+url <- paste0("https://uri.osn.mghpcc.org/bu4cast-ci/write/challenges/project_id=bu4cast/forecasts/", challenge_name_example, "/",team_name_example, "-submission.csv")
 
 # Write to bucket
 res <- PUT(url, body = upload_file(test_file))
@@ -134,7 +134,7 @@ with tempfile.NamedTemporaryFile(mode = 'w', suffix = '.csv', delete = False) as
 # Create filename
 challenge_name_example = 'test'
 team_name_example = 'KAIYA' ## FILL IN WITH YOUR OWN TEAM NAME EXAMPLE
-url = f"https://minio-s3.apps.shift.nerc.mghpcc.org/bu4cast-ci-write/challenges/project_id=bu4cast/forecasts/{challenge_name_example}/{team_name_example}-submission.csv"
+url = f"https://uri.osn.mghpcc.org/bu4cast-ci/write/challenges/project_id=bu4cast/forecasts/{challenge_name_example}/{team_name_example}-submission.csv"
 
 # Write to bucket
 with open(test_file, 'rb') as f:

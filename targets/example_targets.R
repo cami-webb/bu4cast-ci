@@ -16,8 +16,8 @@
 # the duplicate lines
 
 # Set Up Connection
-s3_read <- arrow::s3_bucket('bu4cast-ci-read',
-                            endpoint_override = 'https://minio-s3.apps.shift.nerc.mghpcc.org',
+s3_read <- arrow::s3_bucket('bu4cast-ci/read',
+                            endpoint_override = 'https://uri.osn.mghpcc.org',
                             access_key = Sys.getenv("OSN_KEY"),
                             secret_key = Sys.getenv("OSN_SECRET"),
                             scheme = "https")
@@ -70,8 +70,8 @@ colnames(data) = c('project_id', 'site_id', 'datetime', 'duration', 'variable', 
 ## Step 4: Write to S3 Bucket
 
 # Set Up S3 Connection
-s3_read <- arrow::s3_bucket('bu4cast-ci-read',
-                            endpoint_override = 'https://minio-s3.apps.shift.nerc.mghpcc.org',
+s3_read <- arrow::s3_bucket('bu4cast-ci/read',
+                            endpoint_override = 'https://uri.osn.mghpcc.org',
                             access_key = Sys.getenv("OSN_KEY"),
                             secret_key = Sys.getenv("OSN_SECRET"),
                             scheme = "https")

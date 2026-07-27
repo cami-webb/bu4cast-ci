@@ -15,7 +15,7 @@ library(lubridate)
 ne = 31
 
 # Read in data
-urban_data_url = 'https://minio-s3.apps.shift.nerc.mghpcc.org/bu4cast-ci-read/challenges/targets/project_id=bu4cast/urban-targets.csv'
+urban_data_url = 'https://uri.osn.mghpcc.org/bu4cast-ci/read/challenges/targets/project_id=bu4cast/urban-targets.csv'
 big_urban_data = read_csv(urban_data_url, 
                           col_types = cols(project_id = col_character(),
                                            site_id = col_character(),
@@ -24,7 +24,7 @@ big_urban_data = read_csv(urban_data_url,
                                            variable = col_character(),
                                            observation = col_double()))
 # Read in all sites
-sites_metadata_url = 'https://minio-s3.apps.shift.nerc.mghpcc.org/bu4cast-ci-read/challenges/targets/project_id=bu4cast/urban-targets-sites.csv'
+sites_metadata_url = 'https://uri.osn.mghpcc.org/bu4cast-ci/read/challenges/targets/project_id=bu4cast/urban-targets-sites.csv'
 
 sites_metadata <- read_csv(
   sites_metadata_url,

@@ -5,7 +5,7 @@ library(yaml)
 source("drivers/to_hourly.R")
 
 minioclient::install_mc()
-mc_alias_set("osn", "minio-s3.apps.shift.nerc.mghpcc.org", Sys.getenv("OSN_KEY"), Sys.getenv("OSN_SECRET"))
+mc_alias_set("osn", "uri.osn.mghpcc.org", Sys.getenv("OSN_KEY"), Sys.getenv("OSN_SECRET"))
 
 config <- yaml::read_yaml("challenge_configuration.yaml")
 
@@ -33,8 +33,8 @@ site_coords <- arrow::read_csv_arrow(
 site_list <- site_coords$site_id
 message("Sites loaded: ", length(site_list))
 
-mc_alias_set("osn", "minio-s3.apps.shift.nerc.mghpcc.org", Sys.getenv("OSN_KEY"), Sys.getenv("OSN_SECRET"))
-mc_mirror("osn/bu4cast-ci-read/challenges/project_id=bu4cast/drivers/pseudo", "pseudo")
+mc_alias_set("osn", "uri.osn.mghpcc.org", Sys.getenv("OSN_KEY"), Sys.getenv("OSN_SECRET"))
+mc_mirror("osn/bu4cast-ci/read/challenges/project_id=bu4cast/drivers/pseudo", "pseudo")
 
 future::plan("future::multisession", workers = 4)
 furrr::future_walk(site_list, function(curr_site_id) {

@@ -26,7 +26,7 @@ print('Read in config')
 # Define bucket locations
 # Not sure what these should be (I think these are right but I would double check)
 forecast_parquet_bucket <- sub("^s3://", "", config$sub_parquet_bucket)
-forecast_bundled_parquet_bucket <- paste0(config$s3_bucket_write, "/challenges/project_id=", config$project_id, "/bundled-parquet/")
+forecast_bundled_parquet_bucket <- paste0(config$s3_bucket_write, "/write/challenges/project_id=", config$project_id, "/bundled-parquet/")
 forecasts_bucket_base <- paste0(config$s3_bucket_write, '/', config$submissions_bucket)
 print(forecast_parquet_bucket)
 print(forecast_bundled_parquet_bucket)
@@ -53,7 +53,7 @@ print('mc access works')
 #     TYPE S3,
 #     KEY_ID '%s',
 #     SECRET '%s',
-#     ENDPOINT 'https://minio-s3.apps.shift.nerc.mghpcc.org',
+#     ENDPOINT 'https://uri.osn.mghpcc.org',
 #     REGION 'us-east-1',
 #     USE_SSL = true,
 #     URL_STYLE = 'path'
@@ -90,7 +90,7 @@ count <- if (nrow(bundled_contents) == 0) 0 else sum(!bundled_contents$is_folder
 print(count)
 
 # This is testing to see if we can read from the folder
-# x <- mc_ls("osn/bu4cast-ci-write/challenges/project_id=bu4cast/parquet/project_id=bu4cast/duration=P1D/variable=NO2_P1H/model_id=tg_dgam",
+# x <- mc_ls("osn/bu4cast-ci/write/challenges/project_id=bu4cast/parquet/project_id=bu4cast/duration=P1D/variable=NO2_P1H/model_id=tg_dgam",
 #            recursive = TRUE, details = TRUE)
 # print(x)
 # nrow(x)
@@ -108,7 +108,7 @@ dbExecute(con, sprintf("
     TYPE S3,
     KEY_ID '%s',
     SECRET '%s',
-    ENDPOINT 'minio-s3.apps.shift.nerc.mghpcc.org',
+    ENDPOINT 'uri.osn.mghpcc.org',
     USE_SSL true,
     URL_STYLE 'path'
   )
