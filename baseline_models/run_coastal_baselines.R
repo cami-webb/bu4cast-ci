@@ -7,6 +7,7 @@ library(httr)
 source("baseline_models/R/randomWalkDailyFunction.R")
 source("baseline_models/models/coastal_climatology.R")
 source("baseline_models/models/coastal_random_walk.R")
+source("targets/target_helper_functions.R") # read_s3_csv_weblink()
 
 Sys.setenv("AWS_DEFAULT_REGION" = "")
 
@@ -27,13 +28,13 @@ daily_dates <- if (daily_start_date <= daily_end_date) {
 # Read corrected targets (chlora_cci_corrected for both sites)
 corrected_url <- paste0(config$endpoint, "/", config$s3_bucket_read, "/",
                         config$target_groups$Coastal$targets_corrected_filepath)
-targets_all <- readr::read_csv(corrected_url, guess_max = 10000) %>%
+targets_all <- read_s3_csv_weblink(corrected_url, config, guess_max = 10000) %>%
   mutate(datetime = as_date(datetime), site_id = as.character(site_id))
 
 # Read raw targets for chlora_mrwa (site 2 in-situ buoy)
 raw_url <- paste0(config$endpoint, "/", config$s3_bucket_read, "/",
                   config$target_groups$Coastal$targets_filepath)
-raw_targets_mrwa <- readr::read_csv(raw_url, guess_max = 10000) %>%
+raw_targets_mrwa <- read_s3_csv_weblink(raw_url, config, guess_max = 10000) %>%
   mutate(datetime = as_date(datetime), site_id = as.character(site_id)) %>%
   filter(site_id == "2", variable == "chlora_mrwa")
 

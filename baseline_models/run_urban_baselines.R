@@ -8,6 +8,7 @@ source("baseline_models/R/randomWalkDailyFunction.R")
 source("baseline_models/R/randomWalkHourlyFunction.R")
 source("baseline_models/models/urban_climatology.R")
 source("baseline_models/models/urban_random_walk.R")
+source("targets/target_helper_functions.R") # read_s3_csv_weblink()
 
 Sys.setenv("AWS_DEFAULT_REGION" = "")
 
@@ -18,13 +19,13 @@ base_url <- gsub("https://", "", config$endpoint)
 # Read target
 targets_url <- paste0(config$endpoint, "/", config$s3_bucket_read, "/",
                       config$target_groups$Urban$targets_filepath)
-targets_all <- readr::read_csv(targets_url, guess_max = 10000) %>%
+targets_all <- read_s3_csv_weblink(targets_url, config, guess_max = 10000) %>%
   mutate(datetime = as_datetime(datetime))
 
-# Read site metadata 
+# Read site metadata
 metadata_url <- paste0(config$endpoint, "/", config$s3_bucket_read, "/",
                        config$target_groups$Urban$site_metadata_filepath)
-sites_metadata <- readr::read_csv(metadata_url)
+sites_metadata <- read_s3_csv_weblink(metadata_url, config)
 
 # Reference dates = null_start_date to yesterday
 all_dates <- seq(null_start_date, Sys.Date() - 1, by = "day")

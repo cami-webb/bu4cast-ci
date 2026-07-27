@@ -11,6 +11,34 @@
 
 library(readr)
 
+#' Read a CSV from S3 via authenticated request (not a plain HTTPS GET) --
+#' the new OSN read bucket has no anonymous/public-read policy, unlike the
+#' old MinIO read bucket, so `url` (a `.../<bucket>/<key>` weblink out of
+#' challenge_configuration.yaml) is rewritten into bucket + key and fetched
+#' with the RO/RW credentials instead.
+read_s3_csv_weblink <- function(url, config, col_types = readr::cols(), guess_max = 1000) {
+  prefix <- paste0(config$endpoint, "/", config$s3_bucket_read, "/")
+  key    <- sub(paste0("^", prefix), "", url)
+  tmp    <- tempfile(fileext = ".csv")
+  on.exit(unlink(tmp), add = TRUE)
+  # Not every workflow/session sets OSN_KEY/OSN_SECRET -- some (e.g.
+  # coastal_urban_baselines.yaml) only export AWS_ACCESS_KEY_ID/
+  # AWS_SECRET_ACCESS_KEY for aws.s3's own default credential lookup.
+  s3_key    <- Sys.getenv("OSN_KEY",    Sys.getenv("AWS_ACCESS_KEY_ID"))
+  s3_secret <- Sys.getenv("OSN_SECRET", Sys.getenv("AWS_SECRET_ACCESS_KEY"))
+  aws.s3::save_object(
+    object    = key,
+    file      = tmp,
+    bucket    = config$s3_bucket_read,
+    base_url  = gsub("https://", "", config$endpoint),
+    use_https = TRUE,
+    region    = "",
+    key       = s3_key,
+    secret    = s3_secret
+  )
+  readr::read_csv(tmp, col_types = col_types, guess_max = guess_max, show_col_types = FALSE)
+}
+
 max_date <- function(a, b) {
   as.Date(pmax(a, b, na.rm = TRUE), origin = "1970-01-01")
 }
@@ -27,8 +55,8 @@ urban_metadata_sites <- function(combined_data) {
   config <- yaml::read_yaml("challenge_configuration.yaml")
   s3_site_metadata_url = config$target_groups$Urban$targets_sites_weblink
 
-  old_metadata_df_sites <- read_csv(
-    s3_site_metadata_url,
+  old_metadata_df_sites <- read_s3_csv_weblink(
+    s3_site_metadata_url, config,
     col_types = cols(
       # ID and Location: Character
       field_site_id = col_character(),
@@ -279,7 +307,7 @@ urban_metadata_pollutant <- function(new_data){
   # Read in from S3 bucket the old pollutant metadata
   config <- yaml::read_yaml("challenge_configuration.yaml")
   s3_units_metadata_url = config$target_groups$Urban$targets_units_weblink
-  old_metadata_df_units = read.csv(s3_units_metadata_url)
+  old_metadata_df_units = read_s3_csv_weblink(s3_units_metadata_url, config)
   
   # Create new metadata df
   new_metadata_df_units <- new_data %>%

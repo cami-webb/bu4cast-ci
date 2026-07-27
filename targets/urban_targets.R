@@ -36,7 +36,7 @@ print(paste("filename:", filename))
 
 # Read in old data
 urban_data_url = config$target_groups$Urban$targets_weblink
-old_data = read_csv(urban_data_url, 
+old_data = read_s3_csv_weblink(urban_data_url, config,
                           col_types = cols(project_id = col_character(),
                                            site_id = col_character(),
                                            datetime = col_character(),
