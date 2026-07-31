@@ -95,7 +95,8 @@ if(length(submissions) > 0){
     TYPE S3,
     KEY_ID '%s',
     SECRET '%s',
-    ENDPOINT 'https://uri.osn.mghpcc.org',
+    ENDPOINT 'uri.osn.mghpcc.org',
+    URL_STYLE 'path',
     REGION 'us-east-1',
     USE_SSL TRUE
   )
