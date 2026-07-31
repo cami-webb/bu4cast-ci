@@ -148,6 +148,16 @@ if(length(submissions) > 0){
         # Pull out forecast
         fc <- read4cast::read_forecast(submissions[i])
 
+        # read_forecast() type-guesses columns from the raw CSV -- purely
+        # numeric-looking site IDs (coastal: "1"/"2") get inferred as numeric
+        # rather than text (unlike urban's hyphenated FIPS codes, which are
+        # unambiguous), and that numeric type then survives into parquet and
+        # comes back out as "1.0"/"2.0" once cast to string during bundling,
+        # silently breaking every downstream join on site_id. Force it to
+        # character immediately so nothing after this point can inherit the
+        # wrong type.
+        fc <- fc |> dplyr::mutate(site_id = as.character(site_id))
+
         # Get current datetime
         pub_datetime <- strftime(Sys.time(), format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
 

@@ -102,13 +102,20 @@ DBI::dbExecute(con, paste0(
   forecast_bundled_parquet_bucket, "**',
   HIVE_PARTITIONING=TRUE, UNION_BY_NAME=TRUE, FILENAME=FALSE)"
 ))
+# Coastal site_id ("1"/"2") gets inferred as numeric somewhere in the bundling
+# pipeline (unlike urban's hyphenated FIPS codes, which are unambiguously
+# strings) and comes back out of bundled-parquet as "1.0"/"2.0" -- which then
+# fails to match targets' clean "1"/"2" on every join. Strip a trailing ".0"
+# unconditionally; it never appears in a legitimate non-coastal site_id.
 forecasts <- dplyr::tbl(con, "forecast_view") |>
   mutate(family = ifelse(family == 'ensemble', "sample", family)) |>
   mutate(horizon = date_diff('day', as.POSIXct(reference_datetime), as.POSIXct(datetime))) |>
-  filter(!(duration == "P1D" & horizon > 35))
+  filter(!(duration == "P1D" & horizon > 35)) |>
+  mutate(site_id = dbplyr::sql("regexp_replace(site_id, '\\.0$', '')"))
 
 scores <- tryCatch(
   open_dataset(paste0("s3://", scores_bundled_parquet_bucket), conn = con) |>
+    mutate(site_id = dbplyr::sql("regexp_replace(site_id, '\\.0$', '')")) |>
     filter(project_id == {project},
            datetime > {cut_off_date},
            !is.na(observation)),
