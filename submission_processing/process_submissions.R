@@ -212,8 +212,16 @@ if(length(submissions) > 0){
 
         ## arrow write has gone nuts... let's update
         # Using duckdbfs
+        # Credentials must be passed explicitly -- duckdbfs' own S3 auto-detection
+        # only recognizes the standard AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env
+        # var names, which this workflow never sets (it sets AWS_ACCESS_KEY_SUBMISSIONS/
+        # AWS_SECRET_ACCESS_KEY_SUBMISSIONS instead), so without this it silently made
+        # anonymous requests -- which the old write bucket's public-upload policy
+        # tolerated, but the new bucket's private processed_submissions/ path doesn't.
         duckdbfs::duckdb_s3_config(
           s3_endpoint = config$submissions_endpoint,
+          s3_access_key_id = key_id,
+          s3_secret_access_key = secret,
           s3_use_ssl = TRUE,
           s3_url_style = "path"
         )
