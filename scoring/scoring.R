@@ -9,7 +9,7 @@ library(yaml)
 library(DBI)
 
 install_mc()
-mc_alias_set("minio", "minio-s3.apps.shift.nerc.mghpcc.org", Sys.getenv("OSN_KEY"), Sys.getenv("OSN_SECRET"))
+mc_alias_set("minio", "uri.osn.mghpcc.org", Sys.getenv("OSN_KEY"), Sys.getenv("OSN_SECRET"))
 
 config <- read_yaml("challenge_configuration.yaml")
 scores_bundled_parquet_bucket <- paste0(config$scores_bucket, "/bundled-parquet/")
@@ -18,7 +18,7 @@ project <- config$project_id
 setup_s3 <- function(con) {
   DBI::dbExecute(con, paste0("SET s3_access_key_id='",     Sys.getenv("OSN_KEY"),    "';"))
   DBI::dbExecute(con, paste0("SET s3_secret_access_key='", Sys.getenv("OSN_SECRET"), "';"))
-  DBI::dbExecute(con, "SET s3_endpoint='minio-s3.apps.shift.nerc.mghpcc.org';")
+  DBI::dbExecute(con, "SET s3_endpoint='uri.osn.mghpcc.org';")
   DBI::dbExecute(con, "SET s3_url_style='path';")
   DBI::dbExecute(con, "SET s3_use_ssl=true;")
   invisible(con)
@@ -29,7 +29,7 @@ con <- duckdbfs::cached_connection(tempfile())
 setup_s3(con)
 
 fc <- tryCatch(
-  open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/score_me", conn = con) |>
+  open_dataset("s3://bu4cast-ci/write/challenges/project_id=bu4cast/tmp/score_me", conn = con) |>
     filter(!is.na(model_id)),
   error = function(e) {
     message("No score_me files found, nothing to score: ", e$message)
@@ -59,7 +59,7 @@ score_group <- function(i, groups, project = config$project_id) {
   con <- duckdbfs::cached_connection(tempfile())
   setup_s3(con)
 
-  fc <- duckdbfs::open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/score_me/**",
+  fc <- duckdbfs::open_dataset("s3://bu4cast-ci/write/challenges/project_id=bu4cast/tmp/score_me/**",
                                conn = con) |>
     dplyr::filter(!is.na(model_id))
 

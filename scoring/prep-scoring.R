@@ -16,7 +16,7 @@ DBI::dbExecute(con, "SET THREADS=64;")
 setup_s3 <- function(con) {
   DBI::dbExecute(con, paste0("SET s3_access_key_id='", Sys.getenv("OSN_KEY"), "';"))
   DBI::dbExecute(con, paste0("SET s3_secret_access_key='", Sys.getenv("OSN_SECRET"), "';"))
-  DBI::dbExecute(con, "SET s3_endpoint='minio-s3.apps.shift.nerc.mghpcc.org';")
+  DBI::dbExecute(con, "SET s3_endpoint='uri.osn.mghpcc.org';")
   DBI::dbExecute(con, "SET s3_url_style='path';")
   DBI::dbExecute(con, "SET s3_use_ssl=true;")
   invisible(con)
@@ -24,7 +24,7 @@ setup_s3 <- function(con) {
 setup_s3(con)
 
 install_mc()
-mc_alias_set("minio", "minio-s3.apps.shift.nerc.mghpcc.org", Sys.getenv("OSN_KEY"), Sys.getenv("OSN_SECRET"))
+mc_alias_set("minio", "uri.osn.mghpcc.org", Sys.getenv("OSN_KEY"), Sys.getenv("OSN_SECRET"))
 
 remove_dir <- function(path) {
   tryCatch(
@@ -48,14 +48,14 @@ remove_dir <- function(path) {
   )
 }
 
-remove_dir("minio/bu4cast-ci-write/challenges/project_id=bu4cast/tmp/score_me")
-remove_dir("minio/bu4cast-ci-write/challenges/project_id=bu4cast/tmp/forecasts")
-remove_dir("minio/bu4cast-ci-write/challenges/project_id=bu4cast/tmp/targets")
-remove_dir("minio/bu4cast-ci-write/challenges/project_id=bu4cast/tmp/scores")
+remove_dir("minio/bu4cast-ci/write/challenges/project_id=bu4cast/tmp/score_me")
+remove_dir("minio/bu4cast-ci/write/challenges/project_id=bu4cast/tmp/forecasts")
+remove_dir("minio/bu4cast-ci/write/challenges/project_id=bu4cast/tmp/targets")
+remove_dir("minio/bu4cast-ci/write/challenges/project_id=bu4cast/tmp/scores")
 
 config <- read_yaml("challenge_configuration.yaml")
 
-forecast_bundled_parquet_bucket <- paste0(config$s3_bucket_write, "/challenges/project_id=", config$project_id, "/bundled-parquet/")
+forecast_bundled_parquet_bucket <- paste0(config$s3_bucket_write, "/write/challenges/project_id=", config$project_id, "/bundled-parquet/")
 scores_bundled_parquet_bucket   <- paste0(config$scores_bucket, "/bundled-parquet/")
 
 project        <- config$project_id
@@ -102,13 +102,20 @@ DBI::dbExecute(con, paste0(
   forecast_bundled_parquet_bucket, "**',
   HIVE_PARTITIONING=TRUE, UNION_BY_NAME=TRUE, FILENAME=FALSE)"
 ))
+# Coastal site_id ("1"/"2") gets inferred as numeric somewhere in the bundling
+# pipeline (unlike urban's hyphenated FIPS codes, which are unambiguously
+# strings) and comes back out of bundled-parquet as "1.0"/"2.0" -- which then
+# fails to match targets' clean "1"/"2" on every join. Strip a trailing ".0"
+# unconditionally; it never appears in a legitimate non-coastal site_id.
 forecasts <- dplyr::tbl(con, "forecast_view") |>
   mutate(family = ifelse(family == 'ensemble', "sample", family)) |>
   mutate(horizon = date_diff('day', as.POSIXct(reference_datetime), as.POSIXct(datetime))) |>
-  filter(!(duration == "P1D" & horizon > 35))
+  filter(!(duration == "P1D" & horizon > 35)) |>
+  mutate(site_id = dbplyr::sql("regexp_replace(site_id, '\\.0$', '')"))
 
 scores <- tryCatch(
   open_dataset(paste0("s3://", scores_bundled_parquet_bucket), conn = con) |>
+    mutate(site_id = dbplyr::sql("regexp_replace(site_id, '\\.0$', '')")) |>
     filter(project_id == {project},
            datetime > {cut_off_date},
            !is.na(observation)),
@@ -135,18 +142,18 @@ if (rescore) {
 print("Caching forecasts, scores, targets...")
 
 bench::bench_time({
-  forecasts |> group_by(variable) |> write_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/forecasts")
+  forecasts |> group_by(variable) |> write_dataset("s3://bu4cast-ci/write/challenges/project_id=bu4cast/tmp/forecasts")
 })
 bench::bench_time({
-  scores |> group_by(variable) |> write_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/scores")
+  scores |> group_by(variable) |> write_dataset("s3://bu4cast-ci/write/challenges/project_id=bu4cast/tmp/scores")
 })
 bench::bench_time({
-  targets |> group_by(variable) |> write_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/targets")
+  targets |> group_by(variable) |> write_dataset("s3://bu4cast-ci/write/challenges/project_id=bu4cast/tmp/targets")
 })
 bench::bench_time({
-  forecasts <- open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/forecasts/**", conn = con)
+  forecasts <- open_dataset("s3://bu4cast-ci/write/challenges/project_id=bu4cast/tmp/forecasts/**", conn = con)
   scores    <- tryCatch(
-    open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/scores/**", conn = con),
+    open_dataset("s3://bu4cast-ci/write/challenges/project_id=bu4cast/tmp/scores/**", conn = con),
     error = function(e) {
       message("No existing tmp scores found, treating as empty: ", e$message)
       dplyr::tibble(project_id = character(), site_id = character(),
@@ -157,7 +164,7 @@ bench::bench_time({
         duckdbfs::as_dataset(conn = con)
     }
   )
-  targets   <- open_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/targets/**", conn = con)
+  targets   <- open_dataset("s3://bu4cast-ci/write/challenges/project_id=bu4cast/tmp/targets/**", conn = con)
 })
 
 print("Compute who needs to be scored...")
@@ -166,5 +173,5 @@ bench::bench_time({
     anti_join(select(scores, all_of(score_key_cols))) |>
     inner_join(targets) |>
     group_by(variable) |>
-    write_dataset("s3://bu4cast-ci-write/challenges/project_id=bu4cast/tmp/score_me")
+    write_dataset("s3://bu4cast-ci/write/challenges/project_id=bu4cast/tmp/score_me")
 })

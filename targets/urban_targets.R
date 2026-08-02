@@ -36,7 +36,7 @@ print(paste("filename:", filename))
 
 # Read in old data
 urban_data_url = config$target_groups$Urban$targets_weblink
-old_data = read_csv(urban_data_url, 
+old_data = read_s3_csv_weblink(urban_data_url, config,
                           col_types = cols(project_id = col_character(),
                                            site_id = col_character(),
                                            datetime = col_character(),
@@ -285,8 +285,8 @@ pollutant_metadata_df = urban_metadata_pollutant(copy_updated_data)
 # Step 3: Write to S3 Bucket ----------------------------------------------
 
 # Set Up S3 Connection
-s3_read <- arrow::s3_bucket('bu4cast-ci-read',
-                            endpoint_override = 'https://minio-s3.apps.shift.nerc.mghpcc.org',
+s3_read <- arrow::s3_bucket('bu4cast-ci',
+                            endpoint_override = 'https://uri.osn.mghpcc.org',
                             access_key = Sys.getenv("OSN_KEY"),
                             secret_key = Sys.getenv("OSN_SECRET"),
                             scheme = "https")

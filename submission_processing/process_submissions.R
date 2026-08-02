@@ -95,7 +95,8 @@ if(length(submissions) > 0){
     TYPE S3,
     KEY_ID '%s',
     SECRET '%s',
-    ENDPOINT 'https://minio-s3.apps.shift.nerc.mghpcc.org',
+    ENDPOINT 'uri.osn.mghpcc.org',
+    URL_STYLE 'path',
     REGION 'us-east-1',
     USE_SSL TRUE
   )
@@ -146,6 +147,16 @@ if(length(submissions) > 0){
         
         # Pull out forecast
         fc <- read4cast::read_forecast(submissions[i])
+
+        # read_forecast() type-guesses columns from the raw CSV -- purely
+        # numeric-looking site IDs (coastal: "1"/"2") get inferred as numeric
+        # rather than text (unlike urban's hyphenated FIPS codes, which are
+        # unambiguous), and that numeric type then survives into parquet and
+        # comes back out as "1.0"/"2.0" once cast to string during bundling,
+        # silently breaking every downstream join on site_id. Force it to
+        # character immediately so nothing after this point can inherit the
+        # wrong type.
+        fc <- fc |> dplyr::mutate(site_id = as.character(site_id))
 
         # Get current datetime
         pub_datetime <- strftime(Sys.time(), format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
@@ -207,12 +218,20 @@ if(length(submissions) > 0){
         print(head(fc))
         
         # Add in a parquet for the read bucket
-        s3_read$CreateDir(paste0("parquet/"))
+        s3_read$CreateDir(paste0("read/parquet/"))
 
         ## arrow write has gone nuts... let's update
         # Using duckdbfs
+        # Credentials must be passed explicitly -- duckdbfs' own S3 auto-detection
+        # only recognizes the standard AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env
+        # var names, which this workflow never sets (it sets AWS_ACCESS_KEY_SUBMISSIONS/
+        # AWS_SECRET_ACCESS_KEY_SUBMISSIONS instead), so without this it silently made
+        # anonymous requests -- which the old write bucket's public-upload policy
+        # tolerated, but the new bucket's private processed_submissions/ path doesn't.
         duckdbfs::duckdb_s3_config(
           s3_endpoint = config$submissions_endpoint,
+          s3_access_key_id = key_id,
+          s3_secret_access_key = secret,
           s3_use_ssl = TRUE,
           s3_url_style = "path"
         )
@@ -220,7 +239,7 @@ if(length(submissions) > 0){
         print("creating summaries")
         
         success <- tryCatch({
-          s3_read$CreateDir(paste0("summaries"))
+          s3_read$CreateDir(paste0("read/summaries"))
           fc |>
             dplyr::summarise(prediction = mean(prediction), .by = dplyr::any_of(c("site_id", "datetime", "reference_datetime", "family", "duration", "model_id",
                                                                                   "parameter", "pub_datetime", "reference_date", "variable", "project_id"))) |>

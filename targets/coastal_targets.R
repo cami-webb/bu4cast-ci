@@ -434,6 +434,62 @@ if (start_date_cci_mrwa > end_date) {
   }
 }
 
+## Download uncorrected buoy chlorophyll data for site 2 (A01 FLNTUS sensor, "chlora_pre")
+## Unlike chlora_mrwa, this is raw sensor data straight from the mooring (no MWRA
+## post-processing/validation). It's what's actually available for recent/future
+## dates once the corrected MWRA feed lags behind, so it's kept as its own variable
+## rather than merged into chlora_mrwa.
+
+message("Downloading A01 FLNTUS (uncorrected) chlorophyll data...")
+
+flntus_url <- config$target_groups$Coastal$a01_flntus_url
+
+start_date_pre <- as.Date("2006-01-01")
+if (!is.null(old_data) && nrow(old_data) > 0) {
+  old_pre <- old_data[old_data$variable == "chlora_pre" & old_data$site_id == mrwa_site_id, , drop = FALSE]
+  if (nrow(old_pre) > 0) {
+    last_pre_date <- max(as.Date(substr(old_pre$datetime, 1, 10)), na.rm = TRUE)
+    if (is.finite(last_pre_date)) start_date_pre <- last_pre_date + 1
+  }
+}
+
+pre_data <- tryCatch({
+  tmp_nc <- tempfile(fileext = ".nc")
+  utils::download.file(flntus_url, destfile = tmp_nc, mode = "wb", quiet = TRUE)
+  nc <- ncdf4::nc_open(tmp_nc)
+  on.exit({ try(ncdf4::nc_close(nc), silent = TRUE); unlink(tmp_nc) }, add = TRUE)
+
+  t_raw   <- ncdf4::ncvar_get(nc, "time")
+  origin  <- as.POSIXct("1858-11-17 00:00:00", tz = "UTC")
+  datetime <- origin + t_raw * 86400
+
+  chl <- as.numeric(ncdf4::ncvar_get(nc, "chlorophyll"))
+  qc  <- as.integer(ncdf4::ncvar_get(nc, "chlorophyll_qc"))
+
+  df <- data.frame(date = as.Date(datetime), chlorophyll = chl, qc = qc)
+  # keep only sensor-flagged good-quality obs (qc == 0)
+  df[!is.na(df$chlorophyll) & !is.na(df$qc) & df$qc == 0, ]
+}, error = function(e) {
+  message("A01 FLNTUS download failed: ", conditionMessage(e))
+  data.frame()
+})
+
+pre_has_data <- is.data.frame(pre_data) && nrow(pre_data) > 0
+
+if (pre_has_data) {
+  pre_data <- pre_data %>%
+    dplyr::filter(date >= start_date_pre, date <= end_date) %>%
+    dplyr::group_by(date) %>%
+    dplyr::summarise(chlorophyll = mean(chlorophyll, na.rm = TRUE), .groups = "drop")
+  pre_has_data <- nrow(pre_data) > 0
+}
+
+if (!pre_has_data) {
+  message("No new A01 FLNTUS observations; skipping.")
+} else {
+  message("A01 FLNTUS new rows: ", nrow(pre_data))
+}
+
 ## Format
 message("Formatting to standard format...")
 
@@ -508,8 +564,19 @@ if (!exists("k_cci_mrwa") || is.na(k_cci_mrwa) || k_cci_mrwa == 0) {
     to_standard_chlora(site_id = mrwa_site_id, mode = "cci")
 }
 
+# A01 FLNTUS (chlora_pre) formatted or empty
+if (!exists("pre_has_data") || !isTRUE(pre_has_data)) {
+  message("No new chlora_pre observations; pre_formatted will be empty.")
+  pre_formatted <- empty_targets()
+} else {
+  pre_formatted <- pre_data %>%
+    dplyr::select(date, chlorophyll) %>%
+    dplyr::filter(chlorophyll > 0.001) %>%
+    to_standard_chlora(site_id = mrwa_site_id, mode = "pre")
+}
+
 # Combine
-all_targets <- dplyr::bind_rows(buoy_formatted, cci_formatted, cci_mrwa_formatted)
+all_targets <- dplyr::bind_rows(buoy_formatted, cci_formatted, cci_mrwa_formatted, pre_formatted)
 
 ## Append to existing data
 
